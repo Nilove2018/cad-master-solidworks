@@ -1,0 +1,8 @@
+[
+  {"eval": "window.__allow = setInterval(() => { const b = Array.from(document.querySelectorAll('.card.perm:not(.done) .btn')).find(x => x.textContent.startsWith('Always')); if (b) b.click(); }, 300);"},
+  {"waitFor": "!!document.querySelector('.result') || !!document.querySelector('.note.err')", "timeout": 150000},
+  {"eval": "clearInterval(window.__allow);"},
+  {"wait": 500},
+  {"print": "({ tools: Array.from(document.querySelectorAll('.act summary')).map(s => s.textContent.trim()), shots: document.querySelectorAll('img.shot').length, text: Array.from(document.querySelectorAll('#messages > .md')).map(d => d.textContent).join(' | '), errors: Array.from(document.querySelectorAll('.note.err')).map(n => n.textContent), result: (document.querySelector('.result')||{}).textContent })"},
+  {"shot": "tests/out/host_3.png"}
+]

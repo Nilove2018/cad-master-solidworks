@@ -1,0 +1,25 @@
+# Build output and downloaded dependencies (build.ps1 / tools/fetch-deps.ps1 recreate them)
+bin/
+build/
+lib/
+tools/roslyn/
+*.pdb
+
+# SOLIDWORKS interop DLLs are Dassault's files: never commit them
+SolidWorks.Interop.*.dll
+
+# Local notes, design previews with private screenshots, test output
+notes/
+design/
+tests/out/
+
+# Original full-size logo (assets/logo.png is the published one)
+CAD Master.png
+
+# Editors and OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
+Desktop.ini
+.DS_Store

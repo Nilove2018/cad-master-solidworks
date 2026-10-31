@@ -1,0 +1,6 @@
+{
+  "name": "cad",
+  "version": "1.0.0",
+  "description": "CAD Master workflows for SOLIDWORKS: plan, review, checks, drawings, exports and test runs that follow the solidworks-api skill.",
+  "author": { "name": "CAD Master" }
+}

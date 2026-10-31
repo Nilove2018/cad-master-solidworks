@@ -1,0 +1,6 @@
+[
+  {"waitFor": "!!document.querySelector('#statusLeft') && document.querySelector('#statusLeft').textContent.length > 0", "timeout": 30000},
+  {"wait": 1500},
+  {"print": "({ header: document.querySelector('#ctxLine').textContent, status: document.querySelector('#statusLeft').textContent, overlay: !document.querySelector('#overlay').classList.contains('hidden'), toasts: Array.from(document.querySelectorAll('.toast')).map(t => t.textContent) })"},
+  {"shot": "tests/out/host_1.png"}
+]

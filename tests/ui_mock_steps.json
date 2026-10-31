@@ -1,0 +1,18 @@
+[
+  {"wait": 800},
+  {"shot": "tests/out/ui_1_empty.png"},
+  {"eval": "document.querySelector('#input').value = 'Plan a 1/4-20 tripod mount under the handle'; document.querySelector('#sendBtn').click();"},
+  {"waitFor": "!!document.querySelector('.card.plan')", "timeout": 15000},
+  {"wait": 400},
+  {"shot": "tests/out/ui_2_plan.png"},
+  {"eval": "document.querySelector('.card.plan .btn.pri').click();"},
+  {"wait": 2600},
+  {"shot": "tests/out/ui_3_built.png"},
+  {"eval": "document.querySelector('[data-tab=tasks]').click();"},
+  {"wait": 300},
+  {"shot": "tests/out/ui_4_tasks.png"},
+  {"eval": "document.documentElement.dataset.theme='light'; document.querySelector('#menuBtn').click();"},
+  {"wait": 300},
+  {"shot": "tests/out/ui_5_light_menu.png"},
+  {"print": "Array.from(document.querySelectorAll('.toast')).map(t => t.textContent)"}
+]

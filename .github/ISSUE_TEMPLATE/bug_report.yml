@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in CAD Master doesn't work, or SOLIDWORKS crashed
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please don't attach models or drawings you aren't allowed to share.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: CAD Master (Menu > About), SOLIDWORKS with service pack, Windows
+      placeholder: CAD Master 0.9.0 · SOLIDWORKS 2025 SP1.2 · Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what happened, and what you expected.
+    validations:
+      required: true
+  - type: dropdown
+    id: crash
+    attributes:
+      label: Did SOLIDWORKS crash?
+      options: ["No", "Yes, at start-up", "Yes, while Claude was working", "Yes, at another moment"]
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Menu > Open logs, file cadmaster-<date>.log. Paste the part around the problem and remove anything private.
+      render: text

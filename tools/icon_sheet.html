@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: transparent; }
+  .row { position: absolute; left: 0; display: flex; }
+  .cell { display: flex; align-items: center; justify-content: center; }
+  .cell img { border-radius: 50%; object-fit: cover; }
+</style>
+</head>
+<body>
+<script src="../ui/js/icons.js"></script>
+<script>
+  // One row per icon size; tools\make_icons.ps1 crops the rows into SOLIDWORKS icon strips.
+  // Order must match SwAddin.Commands.
+  const glyphs = [null, 'message-plus', 'clipboard-list', 'pointer', 'camera', 'file-plus', 'zoom-check', 'ruler-2',
+    'list-check', 'file-export', 'route', 'checklist', 'history', 'terminal-2', 'user-circle', 'settings', 'help'];
+  const colors = ['', '#B3202B', '#B3202B', '#B3202B', '#B3202B', '#B3202B', '#B3202B', '#B3202B', '#B3202B', '#B3202B',
+    '#A8771E', '#A8771E', '#A8771E', '#A8771E', '#A8771E', '#A8771E', '#A8771E'];
+  const sizes = [20, 32, 40, 64, 96, 128];
+  let y = 0;
+  sizes.forEach((s) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.top = y + 'px';
+    glyphs.forEach((g, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.style.width = cell.style.height = s + 'px';
+      if (g === null) {
+        cell.innerHTML = `<img src="${s <= 40 ? 'logo_small.png' : 'logo_large.png'}" style="width:${s}px;height:${s}px">`;
+      } else {
+        const px = Math.round(s * 0.92);
+        const stroke = s <= 20 ? 2.1 : s <= 40 ? 2 : 1.8;
+        cell.innerHTML = `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="${colors[i]}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round">${ICONS[g]}</svg>`;
+      }
+      row.appendChild(cell);
+    });
+    document.body.appendChild(row);
+    y += s + 8;
+  });
+</script>
+</body>
+</html>

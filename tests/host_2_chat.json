@@ -1,0 +1,10 @@
+[
+  {"eval": "bridge.send('set_model', {model: 'haiku'}); bridge.send('attach_view', {view: 'current'});"},
+  {"waitFor": "document.querySelectorAll('#ctxChips img').length > 0", "timeout": 30000},
+  {"print": "'view attached: ' + document.querySelectorAll('#ctxChips img').length"},
+  {"eval": "document.querySelector('#input').value = 'Use mcp__solidworks__sw_status and mcp__solidworks__sw_screenshot, then tell me in one short sentence which document is open and what the attached image shows. Do nothing else.'; document.querySelector('#sendBtn').click();"},
+  {"waitFor": "!!document.querySelector('.result') || !!document.querySelector('.note.err') || !!document.querySelector('.card.perm')", "timeout": 150000},
+  {"wait": 800},
+  {"print": "({ tools: Array.from(document.querySelectorAll('.act summary')).map(s => s.textContent.trim()), shots: document.querySelectorAll('img.shot').length, text: Array.from(document.querySelectorAll('#messages > .md')).map(d => d.textContent).join(' | '), errors: Array.from(document.querySelectorAll('.note.err')).map(n => n.textContent), perm: !!document.querySelector('.card.perm'), status: document.querySelector('#statusLeft').textContent + ' / ' + document.querySelector('#statusRight').textContent })"},
+  {"shot": "tests/out/host_2.png"}
+]

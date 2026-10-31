@@ -1,0 +1,13 @@
+[
+  {"waitFor": "document.querySelector('#statusLeft').textContent.startsWith('Signed in')", "timeout": 30000},
+  {"eval": "bridge.send('set_model', {model: 'haiku'}); document.querySelector('#input').value = 'Call mcp__solidworks__sw_feature_tree and mcp__solidworks__sw_check, then reply in one line with the feature count and the What\\'s Wrong count.'; document.querySelector('#sendBtn').click();"},
+  {"waitFor": "!!document.querySelector('.result') || !!document.querySelector('.note.err') || !!document.querySelector('.card.perm')", "timeout": 150000},
+  {"wait": 500},
+  {"print": "({ mode: CADMASTER_STATE.mode, perm: !!document.querySelector('.card.perm'), tools: Array.from(document.querySelectorAll('.act summary')).map(s => s.textContent.trim()), text: Array.from(document.querySelectorAll('#messages > .md')).map(d => d.textContent).join(' | '), cad: CADMASTER_STATE.slash.filter(s => s.includes('cad')), skill: (CADMASTER_STATE.init.skills||[]).includes('solidworks-api'), mcp: CADMASTER_STATE.init.mcp_servers, agents: CADMASTER_STATE.init.agents })"},
+  {"eval": "document.querySelector('[data-tab=terminal]').click();"},
+  {"wait": 800},
+  {"eval": "document.querySelector('#termNew').click();"},
+  {"wait": 12000},
+  {"print": "(() => { const b = CADMASTER_STATE.term.buffer.active; const out = []; for (let i = 0; i < b.length; i++) { const l = b.getLine(i).translateToString(true).trim(); if (l) out.push(l); } return out.slice(-25).join('\\n'); })()"},
+  {"shot": "tests/out/host_4_term.png"}
+]

@@ -1,0 +1,9 @@
+[
+  {"waitFor": "document.querySelector('#statusLeft').textContent.startsWith('Signed in')", "timeout": 30000},
+  {"eval": "document.querySelector('[data-tab=terminal]').click();"},
+  {"wait": 800},
+  {"eval": "document.querySelector('#termNew').click();"},
+  {"wait": 12000},
+  {"print": "(() => { const b = CADMASTER_STATE.term.buffer.active; const out = []; for (let i = 0; i < b.length; i++) { const l = b.getLine(i).translateToString(true).trim(); if (l) out.push(l); } return out.slice(-30).join('\\n'); })()"},
+  {"shot": "tests/out/host_5_term.png"}
+]
