@@ -39,6 +39,12 @@ namespace CADMaster
         PythonInfo python;                       // from the last setup check
         Dictionary<string, object> swTest;       // result of the setup's SOLIDWORKS test, this session
         volatile string fixRunning;              // id of the setup fix that is running
+        UpdateInfo update;                       // newest release found by the update check
+        volatile bool updateChecking, updateInstalling;
+        string updateStep, updateError;          // install progress: download, verify, unpack, switch
+        int updatePct, swYear;
+        Dictionary<string, object> justUpdated;  // "Updated to …" notice, until the panel has shown it
+        System.Threading.Timer updateTimer;
 
         /// <summary>The product version (VERSION file), not the fixed COM AssemblyVersion.</summary>
         public static string Version =>
@@ -68,6 +74,83 @@ namespace CADMaster
             panel.Initialize();
             contextTimer.Tick += (s, e) => OnContextTimer();
             contextTimer.Start();
+            StartUpdates();
+        }
+
+        // ------------------------------------------------------------------ app updates
+        void StartUpdates()
+        {
+            try { swYear = host.App == null ? 0 : 1992 + int.Parse(host.App.RevisionNumber().Split('.')[0]); } catch { }
+            var last = settings.LastRunVersion;
+            if (last != Version)
+            {
+                if (!string.IsNullOrEmpty(last))
+                    justUpdated = Json.O("version", Version, "from", last, "rolledBack", Updater.Compare(Version, last) < 0, "release", Updater.InstalledNotes(Version));
+                settings.LastRunVersion = Version;
+                settings.Save();
+            }
+            Task.Run(() => { try { Updater.Cleanup(); } catch (Exception ex) { Log.Error("update cleanup", ex); } });
+            // First look 45 s after start (SOLIDWORKS is busy before that), then hourly whether a day has passed
+            updateTimer = new System.Threading.Timer(_ => { if (settings.AutoUpdateCheck && UpdateCheckDue()) CheckForUpdate(false); }, null, 45000, 3600000);
+        }
+
+        bool UpdateCheckDue() =>
+            !DateTime.TryParse(settings.LastUpdateCheck, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t)
+            || DateTime.UtcNow - t.ToUniversalTime() > TimeSpan.FromHours(20);
+
+        /// <summary>Sends the whole update state; the panel draws the update bar and the About section from it.</summary>
+        void PostUpdate(string result = null)
+        {
+            var registered = Updater.RegisteredVersion;
+            Post("update", "current", Version, "installed", Updater.Installed, "checking", updateChecking, "installing", updateInstalling,
+                "step", updateStep, "progress", updatePct, "available", update?.ToJson(), "error", updateError, "result", result,
+                "pending", registered != null && registered != Version ? registered : null, "previous", Updater.PreviousVersion,
+                "justUpdated", justUpdated, "lastCheck", settings.LastUpdateCheck);
+        }
+
+        void CheckForUpdate(bool manual)
+        {
+            if (updateChecking || updateInstalling) return;
+            updateChecking = true;
+            if (manual) PostUpdate();
+            string result = null;
+            try
+            {
+                var u = Updater.Check(settings.IncludePrereleases);
+                settings.LastUpdateCheck = DateTime.UtcNow.ToString("o");
+                settings.Save();
+                if (u != null && swYear > 0 && int.TryParse(u.MinSolidworks, out var min) && swYear < min)
+                    u.Blocked = "CAD Master " + u.Version + " needs SOLIDWORKS " + min + " or newer.";
+                if (u != null && !manual && u.Version == settings.SkippedVersion) u = null;
+                update = u;
+                result = u == null ? "uptodate" : "found";
+                Log.Info("update check: " + (u == null ? "up to date (" + Version + ")" : u.Version + " available"));
+            }
+            catch (Exception ex)
+            {
+                Log.Error("update check", ex);
+                if (manual) result = "Couldn't check for updates: " + ex.Message;
+            }
+            finally { updateChecking = false; }
+            if (manual || update != null) PostUpdate(manual ? result : null);
+        }
+
+        void InstallUpdate()
+        {
+            var u = update;
+            if (u == null || updateInstalling) return;
+            updateInstalling = true;
+            updateError = null;
+            PostUpdate();
+            try
+            {
+                Updater.Install(u, (step, pct) => { updateStep = step; updatePct = pct; PostUpdate(); });
+                update = null;
+                if (settings.SkippedVersion == u.Version) { settings.SkippedVersion = ""; settings.Save(); }
+            }
+            catch (Exception ex) { Log.Error("update install", ex); updateError = ex.Message; }
+            finally { updateInstalling = false; updateStep = null; }
+            PostUpdate();
         }
 
         // ------------------------------------------------------------------ helpers
@@ -377,7 +460,23 @@ namespace CADMaster
                         "mode", mode, "model", model, "effort", effort, "mcp", mcp != null, "swConnected", host.App != null);
                     PushContext(true);
                     RefreshAuth();
+                    PostUpdate();
                     break;
+
+                case "update_check": Task.Run(() => CheckForUpdate(true)); break;
+
+                case "update_install": Task.Run(InstallUpdate); break;
+
+                case "update_rollback":
+                    var back = Updater.RollBack();
+                    settings.SkippedVersion = Version; // don't offer the version just rolled back from again
+                    settings.Save();
+                    update = null;
+                    PostUpdate();
+                    Toast("ok", "Restart SOLIDWORKS to go back to CAD Master " + back);
+                    break;
+
+                case "update_seen": justUpdated = null; break;
 
                 case "send":
                     killRequested = false;
@@ -517,7 +616,9 @@ namespace CADMaster
 
                 case "save_settings":
                     var incoming = Json.Deserialize<Settings>(Json.Serialize(m.Obj("settings")));
-                    foreach (var p in typeof(Settings).GetProperties()) p.SetValue(settings, p.GetValue(incoming));
+                    // The add-in's own bookkeeping isn't the panel's to change (its copy may be older)
+                    var internalKeys = new[] { nameof(Settings.LastUpdateCheck), nameof(Settings.SkippedVersion), nameof(Settings.LastRunVersion) };
+                    foreach (var p in typeof(Settings).GetProperties().Where(p => !internalKeys.Contains(p.Name))) p.SetValue(settings, p.GetValue(incoming));
                     settings.Save();
                     Post("settings", "settings", settings);
                     Toast("ok", "Settings saved");
@@ -681,6 +782,7 @@ namespace CADMaster
         {
             contextTimer.Stop();
             contextTimer.Dispose();
+            updateTimer?.Dispose();
             StopSession();
             terminal?.Dispose();
             mcp?.Dispose();

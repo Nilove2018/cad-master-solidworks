@@ -32,9 +32,38 @@ window.installMock = function () {
   const emitSetup = () => { const items = setupItems(); emit({ type: 'setup', items, ready: items.filter((i) => i.required).every((i) => i.state === 'ok'), done: !freshPc && settings.SetupDone }); };
   const FIXES = { install_python: ['python', 'Python is installed'], install_pywin32: ['pywin32', 'pywin32 is installed'], install_skill: ['skill', 'Design rules installed'], run_sw_test: ['swtest', 'SOLIDWORKS test passed'], install_claude: ['claude', 'Claude Code is installed'] };
 
+  // App updates: ?update=available | critical | updated (just updated) | fail (the install fails)
+  const updMode = (new URLSearchParams(location.search)).get('update');
+  const release = { version: '1.0.1', released: '2026-11-08', critical: updMode === 'critical', minSolidworks: '2025', size: 1830000, page: 'https://github.com/Nilove2018/cad-master-solidworks/releases/tag/v1.0.1',
+    highlights: ['Faster thread modelling', 'Fix: crash when reopening assemblies'],
+    notes: '### Added\n- **Faster thread modelling**: cosmetic threads first, real threads only when asked.\n\n### Fixed\n- SOLIDWORKS could crash when a build script reopened an assembly.' };
+  const upd = { current: '1.0.0', installed: true, checking: false, installing: false, progress: 0, available: updMode && updMode !== 'updated' ? release : null,
+    pending: null, previous: '0.9.1', lastCheck: new Date(Date.now() - 3600e3).toISOString(),
+    justUpdated: updMode === 'updated' ? { version: '1.0.0', from: '0.9.1', rolledBack: false, release: Object.assign({}, release, { version: '1.0.0' }) } : null };
+  const emitUpd = (extra) => emit(Object.assign({ type: 'update' }, upd, extra || {}));
+
   window.mockHost = function (msg) {
     switch (msg.type) {
+      case 'update_check':
+        upd.checking = true; emitUpd();
+        setTimeout(() => { upd.checking = false; upd.lastCheck = new Date().toISOString(); emitUpd({ result: upd.available ? 'found' : 'uptodate' }); }, 800);
+        break;
+      case 'update_install': {
+        upd.installing = true; upd.error = null;
+        const steps = [['download', 0], ['download', 35], ['download', 70], ['download', 100], ['verify', 100], ['unpack', 100], ['switch', 100]];
+        steps.forEach(([step, progress], i) => setTimeout(() => { upd.step = step; upd.progress = progress; emitUpd(); }, 400 * i));
+        setTimeout(() => {
+          upd.installing = false; upd.step = null;
+          if (updMode === 'fail') upd.error = 'The download doesn\'t match the release\'s checksum, so it wasn\'t installed. Try again later.';
+          else { upd.pending = release.version; upd.available = null; }
+          emitUpd();
+        }, 400 * steps.length);
+        break;
+      }
+      case 'update_rollback': upd.pending = upd.previous; upd.available = null; emitUpd(); emit({ type: 'toast', level: 'ok', text: 'Restart SOLIDWORKS to go back to CAD Master ' + upd.previous }); break;
+      case 'update_seen': upd.justUpdated = null; break;
       case 'ready':
+        setTimeout(emitUpd, 200);
         emit({ type: 'hello', version: '1.0.0', settings, workspace: 'C:\\Users\\you\\Documents\\CAD Master\\Camera Mount', mode: 'plan', model: 'default', effort: '', swConnected: true, sw: { solidworks: 'SOLIDWORKS 33.1.2' } });
         emit({ type: 'auth', installed: true, loggedIn: true, version: '2.1.309 (Claude Code)', exe: 'C:\\Users\\you\\.local\\bin\\claude.exe', status: { loggedIn: true, authMethod: 'claude.ai', email: 'you@example.com', subscriptionType: 'pro' } });
         emit({ type: 'context', title: 'CM-100 Camera Mount.SLDASM', path: 'C:\\Users\\you\\Documents\\CAD Master\\Camera Mount\\CM-100 Camera Mount.SLDASM', selected: 1 });

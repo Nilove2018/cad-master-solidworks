@@ -305,6 +305,20 @@ details.planbox .md { padding: 0 12px 10px; }
 .setup .sbt { flex: none; }
 .setup .btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .spin { display: inline-flex; animation: spin 1s linear infinite; }
+/* App update bar, under the tabs */
+.updbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; padding: 6px 8px 6px 10px; flex: none; font-size: 12.5px;
+  background: var(--gold-bg); color: var(--gold-text); border-bottom: 1px solid var(--border); }
+.updbar .ut { flex: 1 1 150px; min-width: 0; }
+.updbar .ut svg.i { width: 15px; height: 15px; vertical-align: -3px; margin-right: 5px; }
+.updbar .ut .spin { vertical-align: -3px; }
+.updbar .ut b { font-weight: 600; }
+.updbar.crit, .updbar.err { background: var(--danger-bg); color: var(--danger-text); }
+.updbar .btn { color: inherit; border-color: currentColor; }
+.updbar .btn.pri { background: var(--gold); border-color: var(--gold); color: #1A1406; }
+.updbar.crit .btn.pri, .updbar.err .btn.pri { background: var(--danger); border-color: var(--danger); color: #fff; }
+.updbar .ibtn { color: inherit; }
+.updbar .prog { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--gold); transition: width .3s; }
+
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; }
 .kv div:nth-child(odd) { color: var(--muted); }
 

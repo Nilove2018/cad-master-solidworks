@@ -26,6 +26,16 @@ namespace CADMaster
         public string PythonPath { get; set; } = "";
         /// <summary>The user finished first-run setup; afterwards it only shows when something required is missing.</summary>
         public bool SetupDone { get; set; } = false;
+        /// <summary>Look for a new CAD Master version once a day.</summary>
+        public bool AutoUpdateCheck { get; set; } = true;
+        /// <summary>Also offer test versions (always on while the running version is one).</summary>
+        public bool IncludePrereleases { get; set; } = false;
+        /// <summary>When the last automatic check ran (ISO 8601).</summary>
+        public string LastUpdateCheck { get; set; } = "";
+        /// <summary>A version the user rolled back from: automatic checks don't offer it again.</summary>
+        public string SkippedVersion { get; set; } = "";
+        /// <summary>The version that ran last time, to say "Updated to …" once after an update.</summary>
+        public string LastRunVersion { get; set; } = "";
 
         static string FilePath => Path.Combine(Paths.DataDir, "settings.json");
 

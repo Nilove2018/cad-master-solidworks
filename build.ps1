@@ -37,6 +37,7 @@ Copy-Item (Join-Path $root 'lib\webview2\*') $bin -Force
 $common = @('/nologo', '/langversion:latest', '/platform:x64', '/optimize+', '/debug:portable', '/nowarn:1701,1702',
     "/reference:$fx\System.dll", "/reference:$fx\System.Core.dll", "/reference:$fx\System.Drawing.dll",
     "/reference:$fx\System.Windows.Forms.dll", "/reference:$fx\System.Web.Extensions.dll",
+    "/reference:$fx\System.IO.Compression.dll", "/reference:$fx\System.IO.Compression.FileSystem.dll",
     "/reference:$bin\Microsoft.Web.WebView2.Core.dll", "/reference:$bin\Microsoft.Web.WebView2.WinForms.dll")
 $common += $interop | ForEach-Object { "/reference:$bin\$_" }
 

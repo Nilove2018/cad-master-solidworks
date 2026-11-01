@@ -237,6 +237,7 @@
       { label: 'Settings', icon: 'settings', run: showSettings },
       { label: 'Account', icon: 'user-circle', run: showAccount },
       { label: 'Setup check', icon: 'checklist', run: () => { S.setup = null; showSetup(); } },
+      { label: 'Check for updates', icon: 'refresh', run: checkForUpdates },
       { label: 'Open logs', icon: 'file-text', run: () => send('open_logs') },
       { label: 'About CAD Master', icon: 'help', run: showAbout },
     ], { alignRight: true });
@@ -1008,6 +1009,122 @@
     else if (m.state !== 'running' && m.message) toast(m.state === 'ok' ? 'ok' : 'error', m.message);
   }
 
+  // ------------------------------------------------------------------ app updates
+  // The add-in checks GitHub once a day (and on request), installs a release next to the running one
+  // and switches to it at the next SOLIDWORKS start. The bar under the tabs shows each stage.
+  const UPD_STEP = { download: 'Downloading', verify: 'Checking the download…', unpack: 'Unpacking…', switch: 'Switching over…' };
+
+  function checkForUpdates() { S.updManual = true; send('update_check'); renderAboutUpdates(); }
+
+  function onUpdate(m) {
+    if (m.available) S.updInfo = m.available; // kept after installing, for What's new
+    S.update = m;
+    if (m.result === 'uptodate') toast('ok', 'CAD Master ' + m.current + ' is up to date');
+    else if (m.result && m.result !== 'found') toast('error', m.result);
+    if (m.result === 'found') S.updLater = null;
+    renderUpdateBar();
+    renderAboutUpdates();
+  }
+
+  function renderUpdateBar() {
+    const bar = $('#updBar'), u = S.update;
+    const a = u && u.available, j = u && u.justUpdated;
+    let cls = '', text = '';
+    const acts = [];
+    const act = (label, fn, c) => acts.push([label, fn, c || '']);
+    const whatsNew = (info) => act("What's new", () => showWhatsNew(info));
+    if (!u) { bar.classList.add('hidden'); return; }
+    if (u.installing) {
+      cls = 'busy';
+      const v = (S.updInfo && S.updInfo.version) || '';
+      text = `<span class="spin">${icon('loader-2')}</span>` + esc(u.step === 'download' ? `Downloading CAD Master ${v}… ${u.progress || 0}%` : UPD_STEP[u.step] || 'Preparing…');
+    } else if (u.pending) {
+      const back = cmpVer(u.pending, u.current) < 0;
+      text = icon('circle-check') + (back ? `Restart SOLIDWORKS to go back to <b>CAD Master ${esc(u.pending)}</b>.`
+        : `<b>CAD Master ${esc(u.pending)}</b> is installed. Restart SOLIDWORKS to finish.`);
+      if (!back && S.updInfo && S.updInfo.version === u.pending) whatsNew(S.updInfo);
+    } else if (a && u.error) {
+      cls = 'err';
+      text = icon('alert-triangle') + esc('The update didn\'t install: ' + u.error);
+      act('Try again', () => send('update_install'), 'pri');
+      act('Later', () => { S.updLater = a.version; renderUpdateBar(); });
+    } else if (a && S.updLater !== a.version) {
+      cls = a.critical ? 'crit' : '';
+      text = icon(a.critical ? 'alert-triangle' : 'download') + `<b>CAD Master ${esc(a.version)}</b> is available` + (a.critical ? ': an important fix' : '');
+      whatsNew(a);
+      if (a.blocked) act('Why not?', () => toast('warn', a.blocked));
+      else if (u.installed) act('Update now', () => send('update_install'), 'pri');
+      else if (a.page) act('Release page', () => send('open_url', { url: a.page }));
+      act('Later', () => { S.updLater = a.version; renderUpdateBar(); });
+    } else if (j && !S.updSeen) {
+      text = icon('sparkles') + (j.rolledBack ? `Back on <b>CAD Master ${esc(j.version)}</b>` : `Updated to <b>CAD Master ${esc(j.version)}</b>`);
+      if (j.release && !j.rolledBack) whatsNew(j.release);
+      act('', () => { S.updSeen = true; send('update_seen'); renderUpdateBar(); }, 'x');
+    } else { bar.classList.add('hidden'); return; }
+    bar.className = 'updbar ' + cls;
+    bar.innerHTML = `<span class="ut">${text}</span>`;
+    acts.forEach(([label, fn, c]) => {
+      const b = c === 'x' ? h(`<button class="ibtn" title="Close">${icon('x')}</button>`) : h(`<button class="btn sm ${c}"></button>`);
+      if (c !== 'x') b.textContent = label;
+      b.onclick = fn;
+      bar.appendChild(b);
+    });
+    if (u.installing && u.step === 'download') bar.appendChild(h(`<span class="prog" style="width:${Number(u.progress) || 0}%"></span>`));
+  }
+
+  // 1.2.0 > 1.2.0-beta.2 > 1.1.9 (same order as the add-in's Updater.Compare)
+  function cmpVer(a, b) {
+    const sp = (v) => { const [n, p] = String(v || '0').split(/-(.*)/); return [n.split('.').map(Number), p]; };
+    const [x, px] = sp(a), [y, py] = sp(b);
+    for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+    if (px === py) return 0;
+    if (!px) return 1;
+    if (!py) return -1;
+    return px.localeCompare(py, undefined, { numeric: true });
+  }
+
+  function showWhatsNew(info) {
+    const u = S.update || {};
+    const canInstall = u.available && u.available.version === info.version && u.installed && !info.blocked && !u.installing;
+    const b = overlay("What's new in CAD Master " + info.version, `
+      <p class="sub">${info.released ? 'Released ' + esc(info.released) : ''}${info.critical ? ' · <b>an important fix</b>' : ''}</p>
+      ${info.notes ? '<div class="wn"></div>' : (info.highlights || []).length ? '<div class="md"><ul>' + info.highlights.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '<p>No notes for this version.</p>'}
+      <div class="btns" style="display:flex;flex-wrap:wrap;gap:6px"></div>`);
+    if (info.notes) $('.wn', b).appendChild(md(info.notes.replace(/^### /gm, '#### ')));
+    const btns = $('.btns', b);
+    const mk = (label, cls, fn) => { const x = h(`<button class="btn ${cls}"></button>`); x.textContent = label; x.onclick = fn; btns.appendChild(x); };
+    if (canInstall) mk('Update now', 'pri', () => { send('update_install'); closeOverlay(); });
+    if (info.blocked) btns.appendChild(h('<div class="note err"></div>')).textContent = info.blocked;
+    if (info.page) mk('Release page', '', () => send('open_url', { url: info.page }));
+  }
+
+  function renderAboutUpdates() {
+    const box = $('#aUpd');
+    if (!box) return;
+    const u = S.update || {};
+    const last = u.lastCheck ? new Date(u.lastCheck) : null;
+    box.innerHTML = '';
+    box.appendChild(h(`<div class="kv">
+      <div>Last checked</div><div>${u.checking ? 'checking now…' : last && !isNaN(last) ? esc(last.toLocaleString()) : 'not yet'}</div>
+      ${u.available ? `<div>Available</div><div>${esc(u.available.version)}</div>` : ''}
+      ${u.pending ? `<div>After restart</div><div>${esc(u.pending)}</div>` : ''}</div>`));
+    const btns = h('<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>');
+    const chk = h(`<button class="btn sm">${icon('refresh')}Check for updates</button>`);
+    chk.disabled = !!(u.checking || u.installing);
+    chk.onclick = checkForUpdates;
+    btns.appendChild(chk);
+    if (u.installed && u.previous && !u.pending && !u.installing) {
+      const rb = h(`<button class="btn sm">${icon('history')}Roll back to ${esc(u.previous)}</button>`);
+      rb.onclick = () => {
+        if (!rb.classList.contains('danger')) { rb.classList.add('danger'); rb.lastChild.textContent = `Go back to ${u.previous}? Click again`; return; }
+        send('update_rollback');
+      };
+      btns.appendChild(rb);
+    }
+    box.appendChild(btns);
+    if (u.installed === false) box.appendChild(h('<p class="sub">Developer build: it updates with git pull and build.ps1, not from here.</p>'));
+  }
+
   function login(method) {
     closeOverlay();
     showTab('terminal');
@@ -1057,6 +1174,9 @@
       <div class="field"><label>Text size</label><select id="sFont">${opt([[12, 'Small'], [13, 'Normal'], [14, 'Large'], [16, 'Extra large']], st.FontSize)}</select></div>
       <div class="section">Safety</div>
       <label class="check"><input type="checkbox" id="sBypass"><span>Bypass mode is on: Claude may take the design decisions and build without asking. It never closes or overwrites your own documents.</span></label>
+      <div class="section">Updates</div>
+      <label class="check"><input type="checkbox" id="sAutoUpd"><span>Look for new CAD Master versions once a day. You always decide when to install.</span></label>
+      <label class="check"><input type="checkbox" id="sPre"><span>Also offer test versions (pre-releases)</span></label>
       <div class="btns" style="display:flex;gap:6px"><button class="btn pri" id="sSave">Save</button><button class="btn" id="sLogs">Open logs</button></div>`);
     $('#sClaude', b).value = st.ClaudePath || '';
     $('#sWs', b).value = st.WorkspaceFolder || '';
@@ -1065,6 +1185,8 @@
     $('#sThink', b).checked = st.ShowThinking !== false;
     $('#sExtra', b).value = st.ExtraInstructions || '';
     $('#sBypass', b).checked = !!st.AllowBypass;
+    $('#sAutoUpd', b).checked = st.AutoUpdateCheck !== false;
+    $('#sPre', b).checked = !!st.IncludePrereleases;
     $('#sBrowse', b).onclick = () => send('pick_workspace');
     $('#sLogs', b).onclick = () => send('open_logs');
     $('#sTheme', b).onchange = (e) => { document.documentElement.dataset.theme = e.target.value; };
@@ -1074,6 +1196,7 @@
         DefaultMode: $('#sMode', b).value, PlanFirst: $('#sPlanFirst', b).checked, DefaultModel: $('#sModel', b).value,
         DefaultEffort: $('#sEffort', b).value, AutoAttachContext: $('#sCtx', b).checked, ShowThinking: $('#sThink', b).checked,
         ExtraInstructions: $('#sExtra', b).value, Theme: $('#sTheme', b).value, FontSize: Number($('#sFont', b).value), AllowBypass: $('#sBypass', b).checked,
+        AutoUpdateCheck: $('#sAutoUpd', b).checked, IncludePrereleases: $('#sPre', b).checked,
       });
       send('save_settings', { settings: next });
       closeOverlay();
@@ -1128,6 +1251,8 @@
         <div>SOLIDWORKS tools (MCP)</div><div>${esc(mcp)}</div>
       </div>
       <div><button class="btn sm" id="aSetup">${icon('checklist')}Setup check</button></div>
+      <div class="section">Updates</div>
+      <div id="aUpd"></div>
       <div class="section">Tips</div>
       <div class="md"><ul>
         <li><b>Plan first:</b> describe the part, approve Claude's plan, then watch the Tasks tab.</li>
@@ -1137,6 +1262,7 @@
         <li>Drag the task pane's edge to make it wider, or pop it out with ${icon('arrows-diagonal')}.</li>
       </ul></div>`);
     $('#aSetup').onclick = () => { S.setup = null; showSetup(); };
+    renderAboutUpdates();
   }
 
   function lightbox(src) { const l = $('#lightbox'); $('img', l).src = src; l.classList.remove('hidden'); }
@@ -1178,6 +1304,7 @@
         break;
       case 'setup': onSetup(m); break;
       case 'setup_fix': onSetupFix(m); break;
+      case 'update': onUpdate(m); break;
       case 'context': S.ctx = { title: m.title, path: m.path, selected: m.selected }; renderHeader(); renderCtxChips(); break;
       case 'claude': onClaude(m.msg); break;
       case 'permission': onPermission(m); break;
