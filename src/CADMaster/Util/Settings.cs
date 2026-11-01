@@ -22,6 +22,10 @@ namespace CADMaster
         public bool ShowThinking { get; set; } = true;
         /// <summary>Developers: a solidworks-api skill checkout whose examples\swlib.py should be used. Empty: find the installed skill.</summary>
         public string SkillRepoPath { get; set; } = "";
+        /// <summary>python.exe Claude should use. Empty: found automatically (python on PATH, then the py launcher).</summary>
+        public string PythonPath { get; set; } = "";
+        /// <summary>The user finished first-run setup; afterwards it only shows when something required is missing.</summary>
+        public bool SetupDone { get; set; } = false;
 
         static string FilePath => Path.Combine(Paths.DataDir, "settings.json");
 

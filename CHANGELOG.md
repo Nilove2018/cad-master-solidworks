@@ -3,9 +3,15 @@
 Each version lists **what improved** in plain words. CAD Master will show these notes when an update is available.
 
 ## [Unreleased] (towards 1.0.0)
+### Added
+- **Setup checklist**: opens the first time CAD Master starts, and whenever something it needs is missing. It checks Claude Code, your Claude account, Python, pywin32, Git, the design rules and SOLIDWORKS itself. Each row has a button that installs or fixes it, and the SOLIDWORKS test builds and checks a small block, then closes it without saving. Open it again any time from the menu or About: **Setup check**.
+
+### Fixed
+- Python or Git installed while SOLIDWORKS was open stayed invisible to Claude until SOLIDWORKS restarted. Claude now always gets the current PATH.
+- Claude now uses the Python that the setup check found, for example `py -3` on PCs where only the Python launcher works.
+
 ### Planned
 - Automatic updates: an "update available" bar with notes for the app; silent updates for the design rules.
-- First-run setup: Claude Code, sign-in, Python and pywin32, the skill and a SOLIDWORKS test, each with a fix button.
 - Opt-in, anonymous sharing of lessons learned (see PRIVACY.md).
 
 ## 0.9.1 (2026-11-01)

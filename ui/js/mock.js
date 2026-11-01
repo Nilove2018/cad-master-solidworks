@@ -14,13 +14,47 @@ window.installMock = function () {
   window.MOCK_SHOT = cv.toDataURL('image/png').split(',')[1];
   const settings = { Theme: (new URLSearchParams(location.search)).get('theme') || 'dark', FontSize: 13, PlanFirst: true, AutoAttachContext: true, ShowThinking: true, WorkspaceMode: 'activeDoc', WorkspaceFolder: 'C:\\Users\\you\\Documents\\CAD Master', DefaultMode: 'default', DefaultModel: 'default', DefaultEffort: '' };
 
+  // Setup checklist: ?setup=new shows a fresh PC (things missing), anything else a finished setup.
+  const freshPc = (new URLSearchParams(location.search)).get('setup') === 'new';
+  const have = freshPc ? { claude: true, signin: true, python: false, pywin32: false, git: true, skill: false, swtest: false } : { claude: true, signin: true, python: true, pywin32: true, git: true, skill: true, swtest: false };
+  const setupItems = () => [
+    have.claude ? { id: 'claude', title: 'Claude Code', required: true, state: 'ok', detail: 'Version 2.1.309' } : { id: 'claude', title: 'Claude Code', required: true, state: 'missing', fix: 'install_claude', fixLabel: 'Install Claude Code', detail: 'The engine behind CAD Master, from Anthropic.' },
+    have.signin ? { id: 'signin', title: 'Your Claude account', required: true, state: 'ok', detail: 'you@example.com · Pro plan' } : { id: 'signin', title: 'Your Claude account', required: true, state: 'missing', fix: 'sign_in', fixLabel: 'Sign in', detail: 'Sign in with your own Claude account.' },
+    have.python ? { id: 'python', title: 'Python', required: true, state: 'ok', detail: 'Python 3.12.7' } : { id: 'python', title: 'Python', required: true, state: 'missing', fix: 'install_python', fixLabel: 'Install Python', detail: 'Claude writes its SOLIDWORKS build scripts in Python. Installs Python 3.12 for your Windows user.' },
+    !have.python ? { id: 'pywin32', title: 'SOLIDWORKS link for Python (pywin32)', required: true, state: 'blocked', detail: 'After Python is installed.' }
+      : have.pywin32 ? { id: 'pywin32', title: 'SOLIDWORKS link for Python (pywin32)', required: true, state: 'ok', detail: 'pywin32 311' }
+      : { id: 'pywin32', title: 'SOLIDWORKS link for Python (pywin32)', required: true, state: 'missing', fix: 'install_pywin32', fixLabel: 'Install pywin32', detail: 'Lets Python scripts drive SOLIDWORKS through its API.' },
+    { id: 'git', title: 'Git for Windows', required: true, state: 'ok', detail: 'Found. Claude can use Bash as well as PowerShell.' },
+    have.skill ? { id: 'skill', title: 'Design rules (solidworks-api skill)', required: true, state: 'ok', detail: 'Version 2.3.2, installed by CAD Master' } : { id: 'skill', title: 'Design rules (solidworks-api skill)', required: true, state: 'missing', fix: 'install_skill', fixLabel: 'Install design rules', detail: 'How Claude builds correct SOLIDWORKS models. Updates itself.' },
+    have.swtest ? { id: 'swtest', title: 'SOLIDWORKS test', state: 'ok', fix: 'run_sw_test', fixLabel: 'Run again', detail: 'Passed: built and checked the test block in 14 s.' }
+      : { id: 'swtest', title: 'SOLIDWORKS test', state: 'untested', fix: 'run_sw_test', fixLabel: 'Run test', detail: 'Builds a 40 × 20 × 10 mm test block in a new part, checks it and closes it without saving. About 20 seconds.' },
+  ];
+  const emitSetup = () => { const items = setupItems(); emit({ type: 'setup', items, ready: items.filter((i) => i.required).every((i) => i.state === 'ok'), done: !freshPc && settings.SetupDone }); };
+  const FIXES = { install_python: ['python', 'Python is installed'], install_pywin32: ['pywin32', 'pywin32 is installed'], install_skill: ['skill', 'Design rules installed'], run_sw_test: ['swtest', 'SOLIDWORKS test passed'], install_claude: ['claude', 'Claude Code is installed'] };
+
   window.mockHost = function (msg) {
     switch (msg.type) {
       case 'ready':
         emit({ type: 'hello', version: '1.0.0', settings, workspace: 'C:\\Users\\you\\Documents\\CAD Master\\Camera Mount', mode: 'plan', model: 'default', effort: '', swConnected: true, sw: { solidworks: 'SOLIDWORKS 33.1.2' } });
         emit({ type: 'auth', installed: true, loggedIn: true, version: '2.1.309 (Claude Code)', exe: 'C:\\Users\\you\\.local\\bin\\claude.exe', status: { loggedIn: true, authMethod: 'claude.ai', email: 'you@example.com', subscriptionType: 'pro' } });
         emit({ type: 'context', title: 'CM-100 Camera Mount.SLDASM', path: 'C:\\Users\\you\\Documents\\CAD Master\\Camera Mount\\CM-100 Camera Mount.SLDASM', selected: 1 });
+        if (freshPc) setTimeout(emitSetup, 300); // a finished setup stays out of the way of the UI tests
         break;
+      case 'setup_check': setTimeout(emitSetup, 400); break;
+      case 'setup_fix': {
+        const [key, text] = FIXES[msg.id] || [];
+        emit({ type: 'setup_fix', id: msg.id, state: 'running' });
+        // ?fail=install_pywin32 makes that fix fail, to see the error box
+        const fail = (new URLSearchParams(location.search)).get('fail') === msg.id;
+        setTimeout(() => {
+          if (!fail && key) have[key] = true;
+          emit(fail ? { type: 'setup_fix', id: msg.id, state: 'fail', message: 'pip couldn\'t install pywin32', log: 'ERROR: Could not find a version that satisfies the requirement pywin32\nERROR: No matching distribution found for pywin32' }
+                    : { type: 'setup_fix', id: msg.id, state: 'ok', message: text });
+          emitSetup();
+        }, msg.id === 'run_sw_test' ? 2500 : 1500);
+        break;
+      }
+      case 'setup_done': settings.SetupDone = true; emit({ type: 'settings', settings }); break;
       case 'send': {
         turn++;
         const id = 'mock' + turn;

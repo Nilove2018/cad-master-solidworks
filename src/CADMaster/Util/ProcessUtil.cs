@@ -41,13 +41,55 @@ namespace CADMaster
         public static void ApplyEnv(System.Collections.Specialized.StringDictionary target, IDictionary<string, string> extra)
         {
             foreach (var k in ScrubbedEnv) target.Remove(k);
+            target["PATH"] = FreshPath();
             if (extra != null) foreach (var kv in extra) target[kv.Key] = kv.Value;
         }
 
-        public class Result { public int ExitCode; public string Stdout = ""; public string Stderr = ""; }
+        /// <summary>
+        /// PATH as Windows has it now (machine + user, from the registry) plus this process's own entries.
+        /// SOLIDWORKS keeps the PATH it started with, so without this a program installed while it runs
+        /// (Python, Git, Claude Code) stays invisible to Claude until SOLIDWORKS restarts.
+        /// </summary>
+        public static string FreshPath()
+        {
+            var parts = new List<string>();
+            void Add(string list)
+            {
+                foreach (var p in (list ?? "").Split(';'))
+                {
+                    var d = Environment.ExpandEnvironmentVariables(p.Trim());
+                    if (d.Length > 0 && !parts.Exists(x => string.Equals(x.TrimEnd('\\'), d.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))) parts.Add(d);
+                }
+            }
+            string Reg(Microsoft.Win32.RegistryKey root, string key)
+            {
+                try
+                {
+                    using (var k = root.OpenSubKey(key))
+                        return k?.GetValue("Path", "", Microsoft.Win32.RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                }
+                catch { return null; }
+            }
+            Add(Reg(Microsoft.Win32.Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"));
+            Add(Reg(Microsoft.Win32.Registry.CurrentUser, "Environment"));
+            Add(Environment.GetEnvironmentVariable("PATH"));
+            return string.Join(";", parts);
+        }
+
+        public class Result
+        {
+            public int ExitCode; public string Stdout = ""; public string Stderr = "";
+            public bool Ok => ExitCode == 0;
+            /// <summary>The last lines of stdout and stderr, for showing what went wrong.</summary>
+            public string Tail(int chars = 1500)
+            {
+                var s = (Stdout + "\n" + Stderr).Trim();
+                return s.Length > chars ? "…" + s.Substring(s.Length - chars) : s;
+            }
+        }
 
         /// <summary>Runs a console program without a window and captures its output.</summary>
-        public static Result Run(string exe, IEnumerable<string> args, string cwd = null, int timeoutMs = 30000)
+        public static Result Run(string exe, IEnumerable<string> args, string cwd = null, int timeoutMs = 30000, IDictionary<string, string> env = null)
         {
             var psi = new ProcessStartInfo(exe, Join(args))
             {
@@ -56,7 +98,7 @@ namespace CADMaster
                 StandardOutputEncoding = new UTF8Encoding(false), StandardErrorEncoding = new UTF8Encoding(false),
                 WorkingDirectory = cwd ?? Paths.UserHome,
             };
-            ApplyEnv(psi.EnvironmentVariables, null);
+            ApplyEnv(psi.EnvironmentVariables, env);
             using (var p = Process.Start(psi))
             {
                 var outTask = p.StandardOutput.ReadToEndAsync();

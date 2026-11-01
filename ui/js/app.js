@@ -236,6 +236,7 @@
       '-',
       { label: 'Settings', icon: 'settings', run: showSettings },
       { label: 'Account', icon: 'user-circle', run: showAccount },
+      { label: 'Setup check', icon: 'checklist', run: () => { S.setup = null; showSetup(); } },
       { label: 'Open logs', icon: 'file-text', run: () => send('open_logs') },
       { label: 'About CAD Master', icon: 'help', run: showAbout },
     ], { alignRight: true });
@@ -735,7 +736,7 @@
     const input = $('#input');
     const text = (textOverride != null ? textOverride : input.value).trim();
     if (!text && !S.attachments.length) return;
-    if (S.auth && !S.auth.loggedIn) { showWelcome(); return; }
+    if (S.auth && !S.auth.loggedIn) { showSetup(); return; }
     const atts = S.attachments.splice(0);
     let full = contextPrefix(text) + text;
     atts.filter((a) => a.kind === 'text').forEach((a) => { full += `\n\n[${a.name}]\n${a.text}`; });
@@ -916,24 +917,95 @@
   }
   function closeOverlay() { $('#overlay').classList.add('hidden'); $('#overlay').innerHTML = ''; }
 
-  function showWelcome() {
-    const a = S.auth || {};
-    const notInstalled = a.installed === false;
-    const b = overlay(null, `
+  // ------------------------------------------------------------------ first-run setup
+  // The add-in checks Claude Code, sign-in, Python, pywin32, Git and the design rules, and runs a
+  // SOLIDWORKS test on request. Shown on first start and whenever something required is missing.
+  const SETUP_ICON = { ok: 'circle-check', missing: 'alert-triangle', fail: 'circle-x', blocked: 'circle', untested: 'player-play' };
+  const SETUP_WAIT = { install_claude: 'Installing Claude Code…', install_python: 'Installing Python. This can take a few minutes…', install_pywin32: 'Installing pywin32…',
+    install_git: 'Installing Git. Approve it if Windows asks…', install_skill: 'Downloading the design rules…', run_sw_test: 'Building the test block in SOLIDWORKS. Hands off for a moment…' };
+  const setupOpen = () => !!$('#overlay.setup');
+
+  function showSetup() {
+    overlay('Set up CAD Master', '', { cls: 'setup' });
+    renderSetup();
+    if (!S.setup) send('setup_check');
+  }
+
+  function renderSetup() {
+    const b = $('#overlay.setup .ob');
+    if (!b) return;
+    const st = S.setup;
+    if (!st) { b.innerHTML = `<div class="note"><span class="spin">${icon('loader-2')}</span> Checking this PC…</div>`; return; }
+    const items = st.items || [];
+    const req = items.filter((i) => i.required);
+    const okCount = req.filter((i) => i.state === 'ok').length;
+    b.innerHTML = '';
+    b.appendChild(h(`<div class="shead">
       <img class="logo" src="img/logo.png" alt="">
-      <h1>Welcome to CAD Master</h1>
-      <p>Claude Code inside SOLIDWORKS. ${notInstalled ? 'Claude Code isn\'t installed on this PC yet.' : 'Sign in with your own Claude account to start.'}</p>
-      <div class="btns"></div>
-      <p style="font-size:12px">${notInstalled ? 'This runs the official installer from Anthropic in the Terminal tab.' : 'Sign-in opens your browser. If it shows a code, paste it into the Terminal tab.'}</p>`, { cls: 'welcome' });
-    const btns = $('.btns', b);
-    const mk = (label, cls, fn, ic) => { const x = h(`<button class="btn ${cls}">${ic ? icon(ic) : ''}${esc(label)}</button>`); x.onclick = fn; btns.appendChild(x); };
-    if (notInstalled) mk('Install Claude Code', 'pri', () => { closeOverlay(); showTab('terminal'); ensureTerm(); fitTerm(); send('install_claude'); }, 'download');
-    else {
-      mk('Sign in with Claude', 'pri', () => login('claudeai'), 'login');
-      mk('Anthropic Console account', '', () => login('console'));
-      mk('Single sign-on (SSO)', '', () => login('sso'));
-    }
-    mk('Check again', '', () => send('auth_status'), 'refresh');
+      <div><h1>${st.ready ? 'CAD Master is ready' : 'A few things to set up'}</h1>
+      <p>${st.ready ? 'Everything CAD Master needs is on this PC. Run the SOLIDWORKS test once to be sure the whole chain works.'
+        : 'Each step has a button that sets it up for you with the official installer. ' + okCount + ' of ' + req.length + ' done.'}</p></div></div>`));
+    const list = h('<div class="slist"></div>');
+    items.forEach((it) => {
+      const fix = (S.fixes || {})[it.fix] || {};
+      const running = S.running && S.running === it.fix;
+      const state = running ? 'running' : it.state === 'optional' ? 'missing' : it.state;
+      const row = h(`<div class="srow" data-state="${esc(state)}">
+        <span class="sic">${running ? `<span class="spin">${icon('loader-2')}</span>` : icon(SETUP_ICON[state] || 'circle')}</span>
+        <div class="stx"><div class="stt"></div><div class="sdt"></div></div>
+        <span class="sbt"></span></div>`);
+      $('.stt', row).textContent = it.title;
+      $('.sdt', row).textContent = running ? SETUP_WAIT[it.fix] || 'Working…' : it.detail || '';
+      if (!running && fix.state === 'fail' && fix.message && it.state !== 'ok') {
+        const err = h('<div class="serr"><span></span></div>');
+        $('span', err).textContent = fix.message;
+        if (fix.log) {
+          const d = h('<details><summary>What happened</summary><pre></pre></details>');
+          $('pre', d).textContent = fix.log;
+          d.open = S.openLog === it.fix; // stays open when the list is redrawn
+          d.ontoggle = () => { S.openLog = d.open ? it.fix : null; };
+          err.appendChild(d);
+        }
+        $('.stx', row).appendChild(err);
+      }
+      if (it.fix && !running) {
+        const btn = h(`<button class="btn sm ${it.state === 'ok' ? '' : 'pri'}">${esc(it.fixLabel || 'Fix')}</button>`);
+        btn.disabled = !!S.running;
+        btn.onclick = (e) => it.fix === 'sign_in'
+          ? openMenu(e.currentTarget, [
+              { label: 'Claude account (Pro, Max, Team, Enterprise)', icon: 'login', run: () => login('claudeai') },
+              { label: 'Anthropic Console account', icon: 'login', run: () => login('console') },
+              { label: 'Single sign-on (SSO)', icon: 'login', run: () => login('sso') },
+            ], { alignRight: true })
+          : send('setup_fix', { id: it.fix });
+        $('.sbt', row).appendChild(btn);
+      }
+      list.appendChild(row);
+    });
+    b.appendChild(list);
+    const btns = h('<div class="btns"></div>');
+    const mk = (label, cls, fn, ic) => { const x = h(`<button class="btn ${cls}">${ic ? icon(ic) : ''}${esc(label)}</button>`); x.onclick = fn; btns.appendChild(x); return x; };
+    const go = mk('Start designing', 'pri', () => { send('setup_done'); S.setupDismissed = true; closeOverlay(); showTab('chat'); }, 'arrow-up');
+    go.disabled = !st.ready;
+    mk('Check again', '', () => { S.setup = null; renderSetup(); send('setup_check'); }, 'refresh');
+    if (!st.ready) mk('Later', '', () => { S.setupDismissed = true; closeOverlay(); });
+    b.appendChild(btns);
+    b.appendChild(h(`<p class="sub">Installers come from Anthropic (Claude Code), Microsoft's winget (Python, Git), PyPI (pywin32) and GitHub (design rules). Nothing here sends your designs anywhere. Sign-in happens in your browser; CAD Master never sees your password.</p>`));
+  }
+
+  function onSetup(m) {
+    S.setup = m;
+    if (m.running) S.running = m.running;
+    if (setupOpen()) renderSetup();
+    else if ((!m.ready || !m.done) && !S.setupDismissed && !$('#overlay:not(.hidden)')) showSetup();
+  }
+
+  function onSetupFix(m) {
+    S.fixes = S.fixes || {};
+    S.fixes[m.id] = m;
+    S.running = m.state === 'running' ? m.id : null;
+    if (setupOpen()) renderSetup(); // the row shows the result
+    else if (m.state !== 'running' && m.message) toast(m.state === 'ok' ? 'ok' : 'error', m.message);
   }
 
   function login(method) {
@@ -959,7 +1031,7 @@
       <p class="sub">CAD Master never sees your password or tokens. Claude Code stores them itself.</p>`);
     const btns = $('.btns', b);
     const mk = (label, cls, fn) => { const x = h(`<button class="btn ${cls}">${esc(label)}</button>`); x.onclick = fn; btns.appendChild(x); };
-    if (a.installed === false) mk('Install Claude Code', 'pri', () => { closeOverlay(); showTab('terminal'); ensureTerm(); fitTerm(); send('install_claude'); });
+    if (a.installed === false) mk('Install Claude Code', 'pri', () => { showSetup(); send('setup_fix', { id: 'install_claude' }); });
     else if (a.loggedIn) { mk('Switch account', '', () => login('claudeai')); mk('Sign out', 'danger', () => { send('auth_logout'); closeOverlay(); }); }
     else { mk('Sign in with Claude', 'pri', () => login('claudeai')); mk('Console account', '', () => login('console')); mk('SSO', '', () => login('sso')); }
     mk('Refresh', '', () => send('auth_status'));
@@ -1042,7 +1114,8 @@
 
   function showAbout() {
     const a = S.auth || {};
-    const skill = S.init ? ((S.init.skills || []).includes('solidworks-api') ? 'found' : 'NOT FOUND') : 'checked when a chat starts';
+    // A plugin's skill is listed as "solidworks-api:solidworks-api", a hand-copied one as "solidworks-api"
+    const skill = S.init ? ((S.init.skills || []).some((s) => /(^|:)solidworks-api$/.test(s)) ? 'found' : 'NOT FOUND') : 'checked when a chat starts';
     const mcp = S.init ? ((S.init.mcp_servers || []).find((s) => s.name === 'solidworks') || {}).status || 'not connected' : 'checked when a chat starts';
     overlay('About CAD Master', `
       <div style="text-align:center"><img src="img/logo.png" alt="" style="width:96px;height:96px;border-radius:50%;background:#fff"></div>
@@ -1054,6 +1127,7 @@
         <div>solidworks-api skill</div><div>${esc(skill)}</div>
         <div>SOLIDWORKS tools (MCP)</div><div>${esc(mcp)}</div>
       </div>
+      <div><button class="btn sm" id="aSetup">${icon('checklist')}Setup check</button></div>
       <div class="section">Tips</div>
       <div class="md"><ul>
         <li><b>Plan first:</b> describe the part, approve Claude's plan, then watch the Tasks tab.</li>
@@ -1062,6 +1136,7 @@
         <li>The <b>Terminal</b> tab is the full Claude Code: every slash command and setting.</li>
         <li>Drag the task pane's edge to make it wider, or pop it out with ${icon('arrows-diagonal')}.</li>
       </ul></div>`);
+    $('#aSetup').onclick = () => { S.setup = null; showSetup(); };
   }
 
   function lightbox(src) { const l = $('#lightbox'); $('img', l).src = src; l.classList.remove('hidden'); }
@@ -1098,10 +1173,11 @@
         applySettings(); renderChips(); renderHeader(); renderStatus(); renderEmpty();
         break;
       case 'auth':
+        if (m.loggedIn && S.auth && S.auth.loggedIn === false) toast('ok', 'Signed in');
         S.auth = m; renderHeader(); renderStatus();
-        if (!m.loggedIn) showWelcome();
-        else if ($('#overlay.welcome')) { closeOverlay(); toast('ok', 'Signed in'); showTab('chat'); }
         break;
+      case 'setup': onSetup(m); break;
+      case 'setup_fix': onSetupFix(m); break;
       case 'context': S.ctx = { title: m.title, path: m.path, selected: m.selected }; renderHeader(); renderCtxChips(); break;
       case 'claude': onClaude(m.msg); break;
       case 'permission': onPermission(m); break;
@@ -1130,7 +1206,7 @@
       case 'term_exit':
         if (S.term) S.term.writeln('\r\n\x1b[90m[' + (m.title || 'process') + ' ended]\x1b[0m');
         $('#termTitle').textContent = '';
-        if (m.title === 'Sign in' || m.title === 'Install') send('auth_status');
+        if (m.title === 'Sign in') { S.setupDismissed = false; send('setup_check'); }
         break;
       case 'command': onCommand(m.id); break;
     }

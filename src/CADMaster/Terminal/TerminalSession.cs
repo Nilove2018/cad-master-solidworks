@@ -125,6 +125,7 @@ namespace CADMaster
             var env = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (DictionaryEntry e in Environment.GetEnvironmentVariables()) env[(string)e.Key] = (string)e.Value;
             foreach (var k in ProcessUtil.ScrubbedEnv) env.Remove(k);
+            env["PATH"] = ProcessUtil.FreshPath();
             env["TERM"] = "xterm-256color";
             env["COLORTERM"] = "truecolor";
             if (extra != null) foreach (var kv in extra) env[kv.Key] = kv.Value;

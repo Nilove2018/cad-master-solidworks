@@ -32,6 +32,7 @@ The user is a **mechanical designer, not a programmer**. Think and talk like a s
   - Without swlib: `import cadmaster_sw` (on PYTHONPATH from {{PYTHON_DIR}}), then `swlib.cast(cadmaster_sw.get_raw(), "ISldWorks")` or `cadmaster_sw.get_app()`.
   - If SOLIDWORKS stops answering or has crashed, stop and tell the user. Don't retry in a loop.
 - If a project's `Scripts\swlib.py` is older than the skill's copy (no `cadmaster_instance`, or it falls back to `Dispatch` inside CAD Master), copy the current one first from {{SWLIB}}.
+- Python for build scripts: {{PYTHON}}. Use exactly this command; the full path is also in CADMASTER_PYTHON.
 - Working folder: {{WORKSPACE}}. Keep scripts in `Scripts\` and results in `Outputs\` (skill section 14 layout).
 - Live tools from the add-in:
   - `mcp__solidworks__sw_status`: the active document and all open ones.

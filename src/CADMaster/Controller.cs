@@ -36,6 +36,9 @@ namespace CADMaster
         string mode, model, effort;
         int termCols = 100, termRows = 30;
         bool killRequested, contextStale;
+        PythonInfo python;                       // from the last setup check
+        Dictionary<string, object> swTest;       // result of the setup's SOLIDWORKS test, this session
+        volatile string fixRunning;              // id of the setup fix that is running
 
         /// <summary>The product version (VERSION file), not the fixed COM AssemblyVersion.</summary>
         public static string Version =>
@@ -176,6 +179,7 @@ namespace CADMaster
                 { "PYTHONIOENCODING", "utf-8" },
             };
             if (mcp != null) env["CADMASTER_MCP_URL"] = mcp.Url;
+            if (python != null) env["CADMASTER_PYTHON"] = python.Exe;
             var py = System.Environment.GetEnvironmentVariable("PYTHONPATH");
             env["PYTHONPATH"] = string.IsNullOrEmpty(py) ? Paths.PythonDir : py + ";" + Paths.PythonDir;
             return env;
@@ -187,40 +191,15 @@ namespace CADMaster
             var text = File.Exists(template) ? File.ReadAllText(template) : "You are running inside SOLIDWORKS through the CAD Master add-in.";
             string swVersion = "";
             try { swVersion = host.App?.RevisionNumber() ?? ""; } catch { }
+            var py = python ?? (python = PythonLocator.Find(settings));
             return text.Replace("{{SW_VERSION}}", swVersion)
                        .Replace("{{SW_PID}}", host.SwProcessId.ToString())
                        .Replace("{{WORKSPACE}}", Workspace())
                        .Replace("{{PYTHON_DIR}}", Paths.PythonDir)
-                       .Replace("{{SWLIB}}", FindSwlib() is string swlib ? "`" + swlib + "`" : "the solidworks-api skill's `examples\\swlib.py` (not found on this PC: tell the user to install the skill)")
+                       .Replace("{{PYTHON}}", py != null ? "`" + py.Command + "` (Python " + py.Version + (py.Pywin32 != null ? ", pywin32 " + py.Pywin32 : ", pywin32 NOT installed: tell the user to open Setup") + ")"
+                                                        : "not found on this PC: tell the user to open Setup (menu > Setup check) and install Python")
+                       .Replace("{{SWLIB}}", SkillLocator.FindSwlib(settings) is string swlib ? "`" + swlib + "`" : "the solidworks-api skill's `examples\\swlib.py` (not found on this PC: tell the user to install the design rules in Setup)")
                        .Replace("{{EXTRA}}", string.IsNullOrWhiteSpace(settings.ExtraInstructions) ? "(none)" : settings.ExtraInstructions);
-        }
-
-        /// <summary>
-        /// The skill's examples\swlib.py: a developer checkout from Settings, else the newest copy Claude Code
-        /// installed with the plugin (~/.claude/plugins), else a hand-copied skill folder.
-        /// </summary>
-        string FindSwlib()
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(settings.SkillRepoPath))
-                {
-                    var dev = Path.Combine(settings.SkillRepoPath, "examples", "swlib.py");
-                    if (File.Exists(dev)) return dev;
-                }
-                var plugins = Path.Combine(Paths.ClaudeConfigDir, "plugins");
-                if (Directory.Exists(plugins))
-                {
-                    var newest = Directory.EnumerateFiles(plugins, "swlib.py", SearchOption.AllDirectories)
-                        .Where(f => f.IndexOf("solidworks-api", StringComparison.OrdinalIgnoreCase) >= 0)
-                        .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
-                    if (newest != null) return newest;
-                }
-                var skill = Path.Combine(Paths.ClaudeConfigDir, "skills", "solidworks-api", "examples", "swlib.py");
-                if (File.Exists(skill)) return skill;
-            }
-            catch (Exception ex) { Log.Error("find swlib", ex); }
-            return null;
         }
 
         string WriteSystemPrompt()
@@ -235,7 +214,7 @@ namespace CADMaster
         void EnsureSession()
         {
             if (session != null && session.Running) return;
-            var exe = ClaudeExe() ?? throw new InvalidOperationException("Claude Code isn't installed. Open Account and choose Install Claude Code.");
+            var exe = ClaudeExe() ?? throw new InvalidOperationException("Claude Code isn't installed. Open Setup (menu > Setup check) and choose Install Claude Code.");
             var ws = Workspace();
             var resume = resumeId ?? lastSessionId;
             var o = new ClaudeSessionOptions
@@ -309,22 +288,69 @@ namespace CADMaster
             return args;
         }
 
-        // ------------------------------------------------------------------ account
+        // ------------------------------------------------------------------ account and setup
+        int setupRun;
+
+        /// <summary>Runs the setup checks in the background; posts "auth" (account) and "setup" (the checklist).</summary>
         void RefreshAuth()
         {
+            var run = Interlocked.Increment(ref setupRun);
             Task.Run(() =>
             {
-                var exe = ClaudeExe();
-                if (exe == null) { Post("auth", "installed", false, "loggedIn", false); return; }
                 try
                 {
-                    var r = ProcessUtil.Run(exe, new[] { "auth", "status", "--json" });
-                    var status = Json.ParseObject(r.Stdout) ?? new Dictionary<string, object>();
-                    string version = "";
-                    try { version = ProcessUtil.Run(exe, new[] { "--version" }, null, 15000).Stdout.Trim(); } catch { }
-                    Post("auth", "installed", true, "exe", exe, "version", version, "loggedIn", status.Bool("loggedIn"), "status", status);
+                    var rep = SetupChecks.Run(settings, host.App != null, swTest);
+                    if (run != setupRun) return; // a newer check is on its way
+                    python = rep.Python;
+                    panel.Post(Json.Serialize(Json.O("type", "auth").Concat(rep.Auth).ToDictionary(kv => kv.Key, kv => kv.Value)));
+                    Post("setup", "items", rep.Items.Select(i => i.ToJson()).ToArray(), "ready", rep.Ready, "done", settings.SetupDone, "running", fixRunning);
                 }
-                catch (Exception ex) { Post("auth", "installed", true, "exe", exe, "loggedIn", false, "error", ex.Message); }
+                catch (Exception ex)
+                {
+                    Log.Error("setup check", ex);
+                    Post("auth", "installed", ClaudeExe() != null, "loggedIn", false, "error", ex.Message);
+                }
+            });
+        }
+
+        /// <summary>Runs one setup fix in the background, then checks everything again.</summary>
+        void RunFix(string id)
+        {
+            if (fixRunning != null) { Toast("warn", "Wait until the current setup step has finished."); return; }
+            if (id == "run_sw_test")
+            {
+                if (host.App == null) { Toast("warn", "The SOLIDWORKS test runs inside SOLIDWORKS."); return; }
+                if (session != null && session.Busy) { Toast("warn", "Wait until Claude has finished, then run the test."); return; }
+            }
+            fixRunning = id;
+            Post("setup_fix", "id", id, "state", "running");
+            Log.Info("setup fix " + id);
+            Task.Run(() =>
+            {
+                FixResult r;
+                try
+                {
+                    switch (id)
+                    {
+                        case "install_claude": r = SetupFixes.InstallClaude(); break;
+                        case "install_python": r = SetupFixes.InstallPython(); break;
+                        case "install_pywin32": r = SetupFixes.InstallPywin32(python ?? PythonLocator.Find(settings)); break;
+                        case "install_skill": r = SetupFixes.InstallSkill(ClaudeExe()); break;
+                        case "install_git": r = SetupFixes.InstallGit(); break;
+                        case "run_sw_test":
+                            var py = python ?? PythonLocator.Find(settings);
+                            swTest = SetupFixes.SolidWorksTest(py, SkillLocator.FindSwlib(settings), ChildEnv());
+                            r = new FixResult { Ok = swTest.Bool("ok"), Message = swTest.Bool("ok") ? "SOLIDWORKS test passed" : "SOLIDWORKS test failed", Log = swTest.Str("error") };
+                            break;
+                        default: r = new FixResult { Message = "Unknown setup step " + id }; break;
+                    }
+                }
+                catch (Exception ex) { Log.Error("setup fix " + id, ex); r = new FixResult { Message = ex.Message }; }
+                Log.Info("setup fix " + id + (r.Ok ? " ok" : " failed: " + r.Message + "\n" + r.Log));
+                fixRunning = null;
+                Post("setup_fix", "id", id, "state", r.Ok ? "ok" : "fail", "message", r.Message, "log", r.Log);
+                if (!r.Ok && r.Url != null) OpenUrl(r.Url);
+                RefreshAuth();
             });
         }
 
@@ -461,16 +487,16 @@ namespace CADMaster
                     RefreshAuth();
                     break;
 
-                case "install_claude":
-                    var bundled = ClaudeLocator.BundledCopy();
-                    if (bundled == null) { OpenUrl("https://code.claude.com/docs/en/setup"); break; }
-                    terminal?.Dispose();
-                    var it = new TerminalSession();
-                    it.Output += d => Post("term_data", "data", d);
-                    it.Exited += c => { Post("term_exit", "code", c, "title", "Install"); RefreshAuth(); };
-                    it.Start(ProcessUtil.Quote(bundled) + " install stable", Paths.UserHome, termCols, termRows, null);
-                    terminal = it;
-                    Post("term_started", "title", "Install Claude Code");
+                case "install_claude": RunFix("install_claude"); break;
+
+                case "setup_check": RefreshAuth(); break;
+
+                case "setup_fix": RunFix(m.Str("id")); break;
+
+                case "setup_done":
+                    settings.SetupDone = true;
+                    settings.Save();
+                    Post("settings", "settings", settings);
                     break;
 
                 case "term_start":
