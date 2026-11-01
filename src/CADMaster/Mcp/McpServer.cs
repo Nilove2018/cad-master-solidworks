@@ -125,7 +125,7 @@ namespace CADMaster
                         return Ok(id, Json.O(
                             "protocolVersion", msg.Obj("params").Str("protocolVersion", "2025-06-18"),
                             "capabilities", Json.O("tools", Json.O("listChanged", false)),
-                            "serverInfo", Json.O("name", "cadmaster-solidworks", "version", typeof(McpServer).Assembly.GetName().Version.ToString()),
+                            "serverInfo", Json.O("name", "cadmaster-solidworks", "version", Controller.Version),
                             "instructions", "Live access to the SOLIDWORKS session that hosts the CAD Master panel."));
                     case "ping": return Ok(id, new Dictionary<string, object>());
                     case "tools/list": return Ok(id, Json.O("tools", listTools()));

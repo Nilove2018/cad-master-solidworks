@@ -1,21 +1,19 @@
-# Registers the CAD Master add-in with SOLIDWORKS (needs one Windows admin prompt).
-# Run build.ps1 first. Afterwards SOLIDWORKS loads CAD Master at start-up
-# (Tools > Add-Ins lists it as "CAD Master").
+# Developer install: registers the build in .\bin with SOLIDWORKS, for the current user.
+# (End users run CADMaster-Setup.exe instead.) Run build.ps1 first. Restart SOLIDWORKS afterwards.
+#
+# Windows asks for administrator approval once, only to add CAD Master to SOLIDWORKS' add-in list
+# (HKLM). Everything else is per user. Running the public installer later points it at the
+# installed version; run this script again to switch back to your build.
 $ErrorActionPreference = 'Stop'
-$dll = Join-Path $PSScriptRoot 'bin\CADMaster.dll'
-if (-not (Test-Path $dll)) { throw "Build first: $dll not found (run build.ps1)." }
+. (Join-Path $PSScriptRoot 'tools\registration.ps1')
+$bin = Join-Path $PSScriptRoot 'bin'
 
-$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $admin) {
-    Write-Host 'Asking Windows for administrator rights to register the add-in...'
-    $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`""
-    exit $p.ExitCode
+Register-CADMasterUser $bin
+Write-Host "Registered for $env:USERNAME -> $bin"
+if (Test-CADMasterMachineKey) { Write-Host 'SOLIDWORKS add-in entry already present.' }
+else {
+    Write-Host 'Asking Windows for administrator approval to add CAD Master to SOLIDWORKS...'
+    Set-CADMasterMachineKey (Join-Path $bin 'icons\addin_20.png')
+    Write-Host 'SOLIDWORKS add-in entry created.'
 }
-
-$regasm = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
-& $regasm /codebase /nologo $dll
-if ($LASTEXITCODE -ne 0) { Write-Host 'RegAsm failed.'; Start-Sleep 8; exit 1 }
-$key = 'HKLM:\SOFTWARE\SolidWorks\AddIns\{C4D7A1E2-5B39-4F6A-9E1D-2A8B7C3F5D10}'
-if (Test-Path $key) { Write-Host 'CAD Master is registered. Restart SOLIDWORKS, or tick it in Tools > Add-Ins.' }
-else { Write-Host 'Registration did not create the SOLIDWORKS add-in key.'; Start-Sleep 8; exit 1 }
-Start-Sleep 3
+Write-Host 'Restart SOLIDWORKS to load this build.'

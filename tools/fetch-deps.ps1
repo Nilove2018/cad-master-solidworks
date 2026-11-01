@@ -1,13 +1,15 @@
 # Downloads the build dependencies that are not stored in the repo:
 #   - the C# compiler (Roslyn, NuGet Microsoft.Net.Compilers.Toolset) into tools\roslyn
 #   - the WebView2 SDK (NuGet Microsoft.Web.WebView2) into lib\webview2
+#   - with -Installer: Inno Setup 6 (NuGet Tools.InnoSetup) into tools\innosetup, for release.ps1
 # build.ps1 runs this automatically when something is missing. Safe to run again.
-param([switch]$Force)
+param([switch]$Force, [switch]$Installer)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $RoslynVersion = '5.9.0'
 $WebView2Version = '1.0.4258.31'
+$InnoSetupVersion = '6.7.3'
 
 function Get-NuGetPackage([string]$id, [string]$version) {
     $cache = Join-Path $env:TEMP "cadmaster-deps\$id.$version"
@@ -39,4 +41,12 @@ if ($Force -or -not (Test-Path (Join-Path $wv 'Microsoft.Web.WebView2.WinForms.d
     Copy-Item (Join-Path $pkg 'lib\net462\Microsoft.Web.WebView2.WinForms.dll') $wv -Force
     Copy-Item (Join-Path $pkg 'runtimes\win-x64\native\WebView2Loader.dll') $wv -Force
     Write-Host "WebView2 SDK $WebView2Version -> lib\webview2"
+}
+
+$inno = Join-Path $root 'tools\innosetup'
+if ($Installer -and ($Force -or -not (Test-Path (Join-Path $inno 'ISCC.exe')))) {
+    $pkg = Get-NuGetPackage 'Tools.InnoSetup' $InnoSetupVersion
+    if (Test-Path $inno) { Remove-Item $inno -Recurse -Force }
+    Copy-Item (Join-Path $pkg 'tools') $inno -Recurse
+    Write-Host "Inno Setup $InnoSetupVersion -> tools\innosetup"
 }

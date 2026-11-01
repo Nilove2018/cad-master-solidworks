@@ -3,6 +3,7 @@ bin/
 build/
 lib/
 tools/roslyn/
+tools/innosetup/
 *.pdb
 
 # SOLIDWORKS interop DLLs are Dassault's files: never commit them

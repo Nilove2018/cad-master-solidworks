@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -36,7 +37,10 @@ namespace CADMaster
         int termCols = 100, termRows = 30;
         bool killRequested, contextStale;
 
-        public static string Version => typeof(Controller).Assembly.GetName().Version.ToString(3);
+        /// <summary>The product version (VERSION file), not the fixed COM AssemblyVersion.</summary>
+        public static string Version =>
+            typeof(Controller).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? typeof(Controller).Assembly.GetName().Version.ToString(3);
 
         public Controller(IPanelHost host, PanelControl panel)
         {

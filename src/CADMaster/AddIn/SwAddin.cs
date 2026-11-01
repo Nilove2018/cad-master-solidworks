@@ -140,15 +140,19 @@ namespace CADMaster
 
         public bool DisconnectFromSW()
         {
+            Log.Info("unloading");
             try
             {
                 ((SldWorks)app).ActiveModelDocChangeNotify -= OnActiveDocChange;
                 popout?.Close();
                 controller?.Dispose();
                 controller = null;
+                Log.Info("unload: Claude, terminal and MCP server stopped");
                 RemoveCommands();
                 try { taskView?.DeleteView(); } catch { }
+                Log.Info("unload: commands and task pane removed");
                 paneHost?.Dispose();
+                Log.Info("unload: panel disposed");
                 if (taskView != null) Marshal.ReleaseComObject(taskView);
                 if (cmdMgr != null) Marshal.ReleaseComObject(cmdMgr);
             }
@@ -156,6 +160,7 @@ namespace CADMaster
             taskView = null; cmdMgr = null; app = null;
             GC.Collect();
             GC.WaitForPendingFinalizers();
+            Log.Info("unloaded");
             return true;
         }
 
