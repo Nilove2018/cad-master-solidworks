@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/License-GPL--3.0-blue.svg"></a>
   <img alt="SOLIDWORKS 2025" src="https://img.shields.io/badge/SOLIDWORKS-2025-dc2626">
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-add--in-7c3aed">
   <img alt="Windows" src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4">
@@ -149,6 +149,10 @@ SOLIDWORKS ── CAD Master add-in (C#, .NET 4.8)
 Bug reports, ideas and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Improvements to *how Claude designs* (API rules and design lessons) belong in the [solidworks-api skill](https://github.com/Nilove2018/solidworks-api-skill).
 
 ## License
-[MIT](LICENSE) © 2026 Nilove Mandal. Bundled third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+[GNU GPL version 3](LICENSE) © 2026 Nilove Mandal. You may use, study, change and share CAD Master, also at work. If you share a changed version, you must publish its source under GPL-3.0 too.
+
+**Additional permission** (GPL-3.0 section 7): you may combine CAD Master with the SOLIDWORKS API interop libraries and the Microsoft Edge WebView2 SDK and Runtime, and share the result, even though their licenses are not GPL-compatible.
+
+Bundled third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 <sub>SOLIDWORKS is a registered trademark of Dassault Systèmes SolidWorks Corporation. Claude and Claude Code are products of Anthropic. CAD Master is an independent project and is not affiliated with, endorsed by, or sponsored by Dassault Systèmes or Anthropic. Always save your work before letting automation drive a live CAD session.</sub>

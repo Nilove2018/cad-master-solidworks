@@ -26,6 +26,6 @@ CAD Master includes or uses the following components. Each is used under its own
 - **Claude Code** by Anthropic, under Anthropic's terms: https://www.anthropic.com/legal
 - **Microsoft Edge WebView2 Runtime**
 - **Python** and **pywin32**, for Claude's build scripts
-- The **solidworks-api skill** (MIT): https://github.com/Nilove2018/solidworks-api-skill
+- The **solidworks-api skill** (GPL-3.0): https://github.com/Nilove2018/solidworks-api-skill
 
 The full license texts are at the source links above.

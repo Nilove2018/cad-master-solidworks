@@ -51,4 +51,4 @@ These come from real crashes:
 - Add a line under **[Unreleased]** in `CHANGELOG.md` saying what improved for users.
 - Don't commit build output (`bin/`), downloaded dependencies (`lib/`, `tools/roslyn/`), SOLIDWORKS interop DLLs, or anything from your own projects.
 
-By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).
+By contributing you agree that your contribution is licensed under the [GNU GPL version 3](LICENSE), with the additional permission described in the README's License section.
