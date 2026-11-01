@@ -64,6 +64,12 @@ $testHostSrc = @(Get-ChildItem (Join-Path $root 'src\TestHost') -Recurse -Filter
 & $csc @common /target:winexe "/reference:$dll" "/out:$bin\CADMaster.TestHost.exe" @testHostSrc
 if ($LASTEXITCODE -ne 0) { throw 'TestHost failed to compile' }
 
+Write-Host 'Compiling CAD Master.exe'
+$launcherSrc = @(Get-ChildItem (Join-Path $root 'src\Launcher') -Recurse -Filter *.cs | ForEach-Object { $_.FullName })
+& $csc /nologo /langversion:latest /platform:anycpu /optimize+ /target:winexe "/win32icon:$(Join-Path $root 'assets\cadmaster.ico')" `
+    "/reference:$fx\System.dll" "/reference:$fx\System.Core.dll" "/reference:$fx\System.Windows.Forms.dll" "/out:$bin\CAD Master.exe" @launcherSrc
+if ($LASTEXITCODE -ne 0) { throw 'CAD Master.exe failed to compile' }
+
 foreach ($d in 'ui', 'plugin', 'icons', 'python') {
     $from = Join-Path $root $d
     if (Test-Path $from) {

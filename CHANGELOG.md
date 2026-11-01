@@ -8,6 +8,11 @@ Each version lists **what improved** in plain words. CAD Master will show these 
 - **Updates inside CAD Master**: once a day CAD Master looks for a new version. A gold bar says *"CAD Master 1.2.0 is available"*, with **What's new** and **Update now** (a red bar for an important fix). The update downloads, is checked against its published checksum and installs next to the running version, so SOLIDWORKS can stay open; it loads at the next SOLIDWORKS start, which then says what improved. About has **Check for updates** and **Roll back** to the version before. No administrator prompt. Turn the daily check off, or get test versions, in Settings.
 - **The design rules update themselves**: once a day, between chats and never while Claude is working, CAD Master updates the solidworks-api skill through Claude Code's own plugin system. A toast says *"Design rules updated to 2.4.0"*, and the Details tab and About list what improved. About also shows the version in use and the last check, with **Check design rules**. Developers who keep their own copy can turn this off: Settings > Design rules > *I manage the design rules myself*.
 
+- **CAD Master.exe** with the owl icon, in the Start menu and (if you tick it) on the desktop: it starts SOLIDWORKS with the CAD Master panel open, or brings a running SOLIDWORKS to the front and opens the panel. The Start menu also has **Uninstall CAD Master**.
+
+### Changed
+- License: GNU GPL version 3 instead of MIT. The name CAD Master and the owl logo and icons are not covered by it (TRADEMARKS.md): changed versions must use their own name and icons.
+
 ### Fixed
 - Python or Git installed while SOLIDWORKS was open stayed invisible to Claude until SOLIDWORKS restarted. Claude now always gets the current PATH.
 - Claude now uses the Python that the setup check found, for example `py -3` on PCs where only the Python launcher works.

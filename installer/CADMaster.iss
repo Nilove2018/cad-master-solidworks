@@ -60,10 +60,20 @@ SetupLogging=yes
 [Messages]
 WelcomeLabel2=This installs [name/ver]: Claude Code inside SOLIDWORKS.%n%nYou can keep SOLIDWORKS open; the new version loads the next time SOLIDWORKS starts.%n%nWindows will ask once for administrator approval, so SOLIDWORKS lists CAD Master in its add-ins.
 
+[Tasks]
+Name: "desktopicon"; Description: "Put a CAD Master shortcut on the desktop"; GroupDescription: "Shortcuts:"
+
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}\{#VerDir}"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "{#StageDir}\icons\addin_20.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\cadmaster.ico"; DestDir: "{app}"; Flags: ignoreversion
+; The launcher sits at a stable path for the shortcuts; in-app updates don't need to replace it
+Source: "{#StageDir}\CAD Master.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{userprograms}\CAD Master\CAD Master"; Filename: "{app}\CAD Master.exe"; IconFilename: "{app}\cadmaster.ico"; Comment: "Open SOLIDWORKS with the CAD Master panel"
+Name: "{userprograms}\CAD Master\Uninstall CAD Master"; Filename: "{uninstallexe}"; IconFilename: "{app}\cadmaster.ico"; Comment: "Remove CAD Master from this PC"
+Name: "{userdesktop}\CAD Master"; Filename: "{app}\CAD Master.exe"; IconFilename: "{app}\cadmaster.ico"; Comment: "Open SOLIDWORKS with the CAD Master panel"; Tasks: desktopicon
 
 [Registry]
 ; Per-user COM class (HKCU overrides HKLM, including the InprocServer32\1.0.0.0 subkey .NET reads)

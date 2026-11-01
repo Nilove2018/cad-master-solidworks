@@ -34,7 +34,7 @@ $out = Join-Path $root 'build\release'
 foreach ($d in $stage, $out) { New-Item -ItemType Directory -Force $d | Out-Null; Get-ChildItem $d -Force | Remove-Item -Recurse -Force }
 Copy-Item (Join-Path $root 'bin\*') $stage -Recurse
 Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -like 'CADMaster.TestHost*' -or $_.Extension -eq '.pdb' } | Remove-Item
-Copy-Item (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD-PARTY-NOTICES.md'), (Join-Path $root 'PRIVACY.md') $stage
+Copy-Item (Join-Path $root 'LICENSE'), (Join-Path $root 'TRADEMARKS.md'), (Join-Path $root 'THIRD-PARTY-NOTICES.md'), (Join-Path $root 'PRIVACY.md') $stage
 $dll = Get-Item (Join-Path $stage 'CADMaster.dll')
 if ($dll.VersionInfo.ProductVersion -ne $version) { throw "CADMaster.dll says $($dll.VersionInfo.ProductVersion), VERSION says $version" }
 

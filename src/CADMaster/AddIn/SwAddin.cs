@@ -144,6 +144,8 @@ namespace CADMaster
             try
             {
                 ((SldWorks)app).ActiveModelDocChangeNotify -= OnActiveDocChange;
+                showWait?.Unregister(null);
+                showEvent?.Dispose();
                 popout?.Close();
                 controller?.Dispose();
                 controller = null;
@@ -202,8 +204,45 @@ namespace CADMaster
                 if (controller == null) return; // unloaded meanwhile
                 Log.Info("SOLIDWORKS start-up finished; starting the panel");
                 try { controller.Start(); } catch (Exception ex) { Log.Error("controller start", ex); }
+                if (System.Environment.GetEnvironmentVariable("CADMASTER_SHOW_PANEL") == "1") ShowPanelAfterStartup();
+                ListenForShowRequests();
             };
             timer.Start();
+        }
+
+        /// <summary>
+        /// Started from CAD Master.exe: show the panel. SOLIDWORKS opens its own Resources pane a few seconds
+        /// after start-up and covers it, so show it again until that has happened.
+        /// </summary>
+        void ShowPanelAfterStartup()
+        {
+            Log.Info("show panel (started from CAD Master.exe)");
+            ShowPanel();
+            int ticks = 0;
+            var again = new Timer { Interval = 2000 };
+            again.Tick += (s, e) =>
+            {
+                if (++ticks >= 4 || controller == null) { again.Stop(); again.Dispose(); }
+                if (controller != null) ShowPanel();
+            };
+            again.Start();
+        }
+
+        System.Threading.EventWaitHandle showEvent;
+        System.Threading.RegisteredWaitHandle showWait;
+
+        /// <summary>CAD Master.exe signals this event when SOLIDWORKS is already running: show the panel.</summary>
+        void ListenForShowRequests()
+        {
+            try
+            {
+                showEvent = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, @"Local\CADMaster.ShowPanel");
+                showWait = System.Threading.ThreadPool.RegisterWaitForSingleObject(showEvent, (s, timedOut) =>
+                {
+                    try { paneHost?.BeginInvoke((Action)(() => { Log.Info("show panel (CAD Master.exe)"); ShowPanel(); })); } catch { }
+                }, null, -1, false);
+            }
+            catch (Exception ex) { Log.Error("show-panel event", ex); }
         }
 
         void CreateCommands()

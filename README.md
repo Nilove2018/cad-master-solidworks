@@ -153,6 +153,8 @@ Bug reports, ideas and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBU
 
 **Additional permission** (GPL-3.0 section 7): you may combine CAD Master with the SOLIDWORKS API interop libraries and the Microsoft Edge WebView2 SDK and Runtime, and share the result, even though their licenses are not GPL-compatible.
 
+The name **CAD Master** and the owl logo and icons are not covered by the GPL: a changed version must use its own name and icons. See [TRADEMARKS.md](TRADEMARKS.md).
+
 Bundled third-party components are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 <sub>SOLIDWORKS is a registered trademark of Dassault Systèmes SolidWorks Corporation. Claude and Claude Code are products of Anthropic. CAD Master is an independent project and is not affiliated with, endorsed by, or sponsored by Dassault Systèmes or Anthropic. Always save your work before letting automation drive a live CAD session.</sub>
