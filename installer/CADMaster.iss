@@ -55,6 +55,8 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 CloseApplications=no
+; CAD Master.exe won't start SOLIDWORKS while this exists: SOLIDWORKS would load a half-installed add-in
+SetupMutex=CADMaster.Setup
 SetupLogging=yes
 
 [Messages]

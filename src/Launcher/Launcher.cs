@@ -22,6 +22,13 @@ namespace CADMaster.Launcher
         [STAThread]
         static int Main()
         {
+            // Setup (installer\CADMaster.iss SetupMutex) is replacing files: SOLIDWORKS would load a half-installed add-in
+            if (Mutex.TryOpenExisting("CADMaster.Setup", out var setup))
+            {
+                setup.Dispose();
+                Message("CAD Master is being installed or updated.\n\nOpen it again when Setup has finished.");
+                return 1;
+            }
             var running = Process.GetProcessesByName("SLDWORKS").FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero)
                           ?? Process.GetProcessesByName("SLDWORKS").FirstOrDefault();
             if (running != null)
