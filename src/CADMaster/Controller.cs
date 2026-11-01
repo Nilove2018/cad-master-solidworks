@@ -45,6 +45,9 @@ namespace CADMaster
         int updatePct, swYear;
         Dictionary<string, object> justUpdated;  // "Updated to …" notice, until the panel has shown it
         System.Threading.Timer updateTimer;
+        (string source, string version)? skillInfo;   // design rules in use, from the last setup check
+        volatile bool skillChecking;
+        Dictionary<string, object> skillUpdate;  // the last design-rule update this session: from, version, notes
 
         /// <summary>The product version (VERSION file), not the fixed COM AssemblyVersion.</summary>
         public static string Version =>
@@ -91,12 +94,60 @@ namespace CADMaster
             }
             Task.Run(() => { try { Updater.Cleanup(); } catch (Exception ex) { Log.Error("update cleanup", ex); } });
             // First look 45 s after start (SOLIDWORKS is busy before that), then hourly whether a day has passed
-            updateTimer = new System.Threading.Timer(_ => { if (settings.AutoUpdateCheck && UpdateCheckDue()) CheckForUpdate(false); }, null, 45000, 3600000);
+            updateTimer = new System.Threading.Timer(_ =>
+            {
+                if (settings.AutoUpdateCheck && Due(settings.LastUpdateCheck)) CheckForUpdate(false);
+                if (!settings.ManageSkillMyself && Due(settings.LastSkillCheck)) CheckSkill(false);
+            }, null, 45000, 3600000);
         }
 
-        bool UpdateCheckDue() =>
-            !DateTime.TryParse(settings.LastUpdateCheck, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t)
+        static bool Due(string lastCheck) =>
+            !DateTime.TryParse(lastCheck, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t)
             || DateTime.UtcNow - t.ToUniversalTime() > TimeSpan.FromHours(20);
+
+        // ------------------------------------------------------------------ design-rule updates
+        void PostSkill(string result = null) =>
+            Post("skill", "version", skillInfo?.version, "source", skillInfo?.source, "managed", settings.ManageSkillMyself, "checking", skillChecking,
+                "lastCheck", settings.LastSkillCheck, "update", skillUpdate, "result", result);
+
+        /// <summary>
+        /// Updates the design rules through Claude Code's plugin system. Never while Claude is working:
+        /// the automatic check tries again an hour later. The new version applies to the next chat.
+        /// </summary>
+        void CheckSkill(bool manual)
+        {
+            if (settings.ManageSkillMyself) { if (manual) PostSkill("You manage the design rules yourself (Settings), so CAD Master leaves them alone."); return; }
+            if (session != null && session.Busy) { if (manual) PostSkill("Claude is working. Check again when it has finished."); return; }
+            var exe = ClaudeExe();
+            if (exe == null || skillChecking) return;
+            skillChecking = true;
+            if (manual) PostSkill();
+            string result = null;
+            try
+            {
+                var r = SkillUpdater.Run(exe);
+                if (r.Outcome != "failed") { settings.LastSkillCheck = DateTime.UtcNow.ToString("o"); settings.Save(); }
+                Log.Info("design rules: " + r.Outcome + (r.NewVersion != null ? " " + r.OldVersion + " -> " + r.NewVersion : "") + (r.Outcome == "failed" ? ": " + r.Message + "\n" + r.Log : ""));
+                switch (r.Outcome)
+                {
+                    case "updated":
+                        skillUpdate = Json.O("from", r.OldVersion, "version", r.NewVersion, "notes", r.Notes);
+                        skillInfo = (skillInfo?.source ?? "installed by CAD Master", r.NewVersion);
+                        result = "updated";
+                        break;
+                    case "up_to_date": result = manual ? "uptodate" : null; break;
+                    case "not_installed": result = manual ? "Your design rules aren't a Claude Code plugin (for example a copy in ~/.claude/skills), so CAD Master doesn't update them." : null; break;
+                    default: result = manual ? r.Message : null; break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("design rules update", ex);
+                if (manual) result = "Couldn't check the design rules: " + ex.Message;
+            }
+            finally { skillChecking = false; }
+            PostSkill(result);
+        }
 
         /// <summary>Sends the whole update state; the panel draws the update bar and the About section from it.</summary>
         void PostUpdate(string result = null)
@@ -385,6 +436,8 @@ namespace CADMaster
                     var rep = SetupChecks.Run(settings, host.App != null, swTest);
                     if (run != setupRun) return; // a newer check is on its way
                     python = rep.Python;
+                    skillInfo = rep.Skill;
+                    PostSkill();
                     panel.Post(Json.Serialize(Json.O("type", "auth").Concat(rep.Auth).ToDictionary(kv => kv.Key, kv => kv.Value)));
                     Post("setup", "items", rep.Items.Select(i => i.ToJson()).ToArray(), "ready", rep.Ready, "done", settings.SetupDone, "running", fixRunning);
                 }
@@ -477,6 +530,8 @@ namespace CADMaster
                     break;
 
                 case "update_seen": justUpdated = null; break;
+
+                case "skill_check": Task.Run(() => CheckSkill(true)); break;
 
                 case "send":
                     killRequested = false;
@@ -617,10 +672,11 @@ namespace CADMaster
                 case "save_settings":
                     var incoming = Json.Deserialize<Settings>(Json.Serialize(m.Obj("settings")));
                     // The add-in's own bookkeeping isn't the panel's to change (its copy may be older)
-                    var internalKeys = new[] { nameof(Settings.LastUpdateCheck), nameof(Settings.SkippedVersion), nameof(Settings.LastRunVersion) };
+                    var internalKeys = new[] { nameof(Settings.LastUpdateCheck), nameof(Settings.SkippedVersion), nameof(Settings.LastRunVersion), nameof(Settings.LastSkillCheck) };
                     foreach (var p in typeof(Settings).GetProperties().Where(p => !internalKeys.Contains(p.Name))) p.SetValue(settings, p.GetValue(incoming));
                     settings.Save();
                     Post("settings", "settings", settings);
+                    PostSkill(); // developer mode shows in About
                     Toast("ok", "Settings saved");
                     break;
 

@@ -319,6 +319,10 @@ details.planbox .md { padding: 0 12px 10px; }
 .updbar .ibtn { color: inherit; }
 .updbar .prog { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--gold); transition: width .3s; }
 
+/* "Design rules updated" entry in Details */
+.skupd { border-left: 2px solid var(--gold); padding: 2px 0 2px 9px; margin: 6px 0; }
+.skupd > .note { text-align: left; }
+
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; }
 .kv div:nth-child(odd) { color: var(--muted); }
 

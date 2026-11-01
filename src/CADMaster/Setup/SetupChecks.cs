@@ -168,6 +168,7 @@ namespace CADMaster
         public List<SetupItem> Items = new List<SetupItem>();
         public Dictionary<string, object> Auth;
         public PythonInfo Python;
+        public (string source, string version)? Skill;
         public bool Ready => Items.Where(i => i.Required).All(i => i.State == "ok");
     }
 
@@ -234,7 +235,7 @@ namespace CADMaster
                                   Detail = "Claude Code downloads and updates the design rules with it. Windows may ask for administrator approval." });
 
             // 6. Design rules (solidworks-api skill)
-            var skill = SkillLocator.Find(settings, exe);
+            var skill = rep.Skill = SkillLocator.Find(settings, exe);
             var skillBlocked = exe == null ? "After Claude Code is installed." : bash == null ? "After Git for Windows is installed." : null;
             rep.Items.Add(skill != null
                 ? new SetupItem { Id = "skill", Title = "Design rules (solidworks-api skill)", Required = true, State = "ok",

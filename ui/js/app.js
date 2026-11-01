@@ -1098,9 +1098,29 @@
     if (info.page) mk('Release page', '', () => send('open_url', { url: info.page }));
   }
 
+  // ------------------------------------------------------------------ design-rule updates
+  // The add-in updates the solidworks-api plugin through Claude Code once a day, never during a task.
+  function onSkill(m) {
+    S.skill = m;
+    if (m.result === 'updated' && m.update) {
+      toast('ok', 'Design rules updated to ' + m.update.version + '. New chats use them.');
+      const d = h(`<div class="skupd"><div class="note">Design rules updated from ${esc(m.update.from)} to ${esc(m.update.version)}. What improved:</div></div>`);
+      d.appendChild(m.update.notes ? md(m.update.notes) : h('<div class="note">No notes for this version.</div>'));
+      addDetail(d);
+    } else if (m.result === 'uptodate') toast('ok', 'Design rules ' + (m.version || '') + ' are up to date');
+    else if (m.result) toast('warn', m.result);
+    renderAboutUpdates();
+  }
+
+  function showSkillNotes(up) {
+    const b = overlay('Design rules ' + up.version, `<p class="sub">Updated from ${esc(up.from)}. What improved:</p><div class="wn"></div>`);
+    $('.wn', b).appendChild(up.notes ? md(up.notes) : h('<p>No notes for this version.</p>'));
+  }
+
   function renderAboutUpdates() {
     const box = $('#aUpd');
     if (!box) return;
+    renderAboutSkill();
     const u = S.update || {};
     const last = u.lastCheck ? new Date(u.lastCheck) : null;
     box.innerHTML = '';
@@ -1123,6 +1143,29 @@
     }
     box.appendChild(btns);
     if (u.installed === false) box.appendChild(h('<p class="sub">Developer build: it updates with git pull and build.ps1, not from here.</p>'));
+  }
+
+  function renderAboutSkill() {
+    const box = $('#aSkill');
+    if (!box) return;
+    const k = S.skill || {};
+    const last = k.lastCheck ? new Date(k.lastCheck) : null;
+    box.innerHTML = '';
+    box.appendChild(h(`<div class="kv">
+      <div>Version</div><div>${k.version ? esc(k.version) + (k.source ? ', ' + esc(k.source) : '') : k.source ? esc(k.source) : 'not found'}</div>
+      <div>Updates</div><div>${k.managed ? 'off: you manage them yourself' : 'automatic, once a day between chats'}</div>
+      <div>Last checked</div><div>${k.checking ? 'checking now…' : last && !isNaN(last) ? esc(last.toLocaleString()) : 'not yet'}</div></div>`));
+    const btns = h('<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>');
+    const chk = h(`<button class="btn sm">${icon('refresh')}Check design rules</button>`);
+    chk.disabled = !!(k.checking || k.managed);
+    chk.onclick = () => { send('skill_check'); S.skill = Object.assign({}, k, { checking: true }); renderAboutSkill(); };
+    btns.appendChild(chk);
+    if (k.update) {
+      const wn = h(`<button class="btn sm">${icon('sparkles')}What improved in ${esc(k.update.version)}</button>`);
+      wn.onclick = () => showSkillNotes(k.update);
+      btns.appendChild(wn);
+    }
+    box.appendChild(btns);
   }
 
   function login(method) {
@@ -1177,6 +1220,9 @@
       <div class="section">Updates</div>
       <label class="check"><input type="checkbox" id="sAutoUpd"><span>Look for new CAD Master versions once a day. You always decide when to install.</span></label>
       <label class="check"><input type="checkbox" id="sPre"><span>Also offer test versions (pre-releases)</span></label>
+      <div class="section">Design rules</div>
+      <label class="check"><input type="checkbox" id="sSkillMine"><span>I manage the design rules myself (developer mode): CAD Master never updates them</span></label>
+      <div class="field"><label>Skill checkout for swlib.py (developers)</label><input type="text" id="sSkillRepo" placeholder="Empty: use the installed design rules"></div>
       <div class="btns" style="display:flex;gap:6px"><button class="btn pri" id="sSave">Save</button><button class="btn" id="sLogs">Open logs</button></div>`);
     $('#sClaude', b).value = st.ClaudePath || '';
     $('#sWs', b).value = st.WorkspaceFolder || '';
@@ -1187,6 +1233,8 @@
     $('#sBypass', b).checked = !!st.AllowBypass;
     $('#sAutoUpd', b).checked = st.AutoUpdateCheck !== false;
     $('#sPre', b).checked = !!st.IncludePrereleases;
+    $('#sSkillMine', b).checked = !!st.ManageSkillMyself;
+    $('#sSkillRepo', b).value = st.SkillRepoPath || '';
     $('#sBrowse', b).onclick = () => send('pick_workspace');
     $('#sLogs', b).onclick = () => send('open_logs');
     $('#sTheme', b).onchange = (e) => { document.documentElement.dataset.theme = e.target.value; };
@@ -1197,6 +1245,7 @@
         DefaultEffort: $('#sEffort', b).value, AutoAttachContext: $('#sCtx', b).checked, ShowThinking: $('#sThink', b).checked,
         ExtraInstructions: $('#sExtra', b).value, Theme: $('#sTheme', b).value, FontSize: Number($('#sFont', b).value), AllowBypass: $('#sBypass', b).checked,
         AutoUpdateCheck: $('#sAutoUpd', b).checked, IncludePrereleases: $('#sPre', b).checked,
+        ManageSkillMyself: $('#sSkillMine', b).checked, SkillRepoPath: $('#sSkillRepo', b).value.trim(),
       });
       send('save_settings', { settings: next });
       closeOverlay();
@@ -1253,6 +1302,8 @@
       <div><button class="btn sm" id="aSetup">${icon('checklist')}Setup check</button></div>
       <div class="section">Updates</div>
       <div id="aUpd"></div>
+      <div class="section">Design rules (solidworks-api skill)</div>
+      <div id="aSkill"></div>
       <div class="section">Tips</div>
       <div class="md"><ul>
         <li><b>Plan first:</b> describe the part, approve Claude's plan, then watch the Tasks tab.</li>
@@ -1305,6 +1356,7 @@
       case 'setup': onSetup(m); break;
       case 'setup_fix': onSetupFix(m); break;
       case 'update': onUpdate(m); break;
+      case 'skill': onSkill(m); break;
       case 'context': S.ctx = { title: m.title, path: m.path, selected: m.selected }; renderHeader(); renderCtxChips(); break;
       case 'claude': onClaude(m.msg); break;
       case 'permission': onPermission(m); break;

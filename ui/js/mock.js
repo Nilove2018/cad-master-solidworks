@@ -42,8 +42,23 @@ window.installMock = function () {
     justUpdated: updMode === 'updated' ? { version: '1.0.0', from: '0.9.1', rolledBack: false, release: Object.assign({}, release, { version: '1.0.0' }) } : null };
   const emitUpd = (extra) => emit(Object.assign({ type: 'update' }, upd, extra || {}));
 
+  // Design rules: ?skill=update makes "Check design rules" find 2.4.0
+  const skill = { version: '2.3.2', source: 'installed by CAD Master', managed: false, checking: false, lastCheck: new Date(Date.now() - 7200e3).toISOString() };
+  const emitSkill = (extra) => emit(Object.assign({ type: 'skill' }, skill, extra || {}));
+
   window.mockHost = function (msg) {
     switch (msg.type) {
+      case 'skill_check':
+        skill.checking = true; emitSkill();
+        setTimeout(() => {
+          skill.checking = false; skill.lastCheck = new Date().toISOString();
+          if ((new URLSearchParams(location.search)).get('skill') === 'update' && skill.version !== '2.4.0') {
+            skill.update = { from: skill.version, version: '2.4.0', notes: '#### 2.4.0 (2026-11-08)\n\n##### Added\n- §6: thread sweeps check the pitch against the profile before sweeping.\n\n##### Fixed\n- §11.1: a clearer first check when SOLIDWORKS stops answering.' };
+            skill.version = '2.4.0';
+            emitSkill({ result: 'updated' });
+          } else emitSkill({ result: 'uptodate' });
+        }, 1000);
+        break;
       case 'update_check':
         upd.checking = true; emitUpd();
         setTimeout(() => { upd.checking = false; upd.lastCheck = new Date().toISOString(); emitUpd({ result: upd.available ? 'found' : 'uptodate' }); }, 800);
@@ -64,6 +79,7 @@ window.installMock = function () {
       case 'update_seen': upd.justUpdated = null; break;
       case 'ready':
         setTimeout(emitUpd, 200);
+        setTimeout(emitSkill, 250);
         emit({ type: 'hello', version: '1.0.0', settings, workspace: 'C:\\Users\\you\\Documents\\CAD Master\\Camera Mount', mode: 'plan', model: 'default', effort: '', swConnected: true, sw: { solidworks: 'SOLIDWORKS 33.1.2' } });
         emit({ type: 'auth', installed: true, loggedIn: true, version: '2.1.309 (Claude Code)', exe: 'C:\\Users\\you\\.local\\bin\\claude.exe', status: { loggedIn: true, authMethod: 'claude.ai', email: 'you@example.com', subscriptionType: 'pro' } });
         emit({ type: 'context', title: 'CM-100 Camera Mount.SLDASM', path: 'C:\\Users\\you\\Documents\\CAD Master\\Camera Mount\\CM-100 Camera Mount.SLDASM', selected: 1 });

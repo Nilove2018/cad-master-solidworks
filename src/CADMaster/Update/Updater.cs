@@ -245,6 +245,19 @@ namespace CADMaster
         }
 
         // ------------------------------------------------------------------ HTTP
+        // Downloads go through Windows' own curl.exe (Windows 10 1803 and later): firewalls often block
+        // SLDWORKS.exe from the internet (licensing), and everything this add-in does in-process is
+        // SOLIDWORKS to the firewall. Without curl.exe it falls back to .NET's HttpWebRequest.
+        static string Curl => File.Exists(Path.Combine(Environment.SystemDirectory, "curl.exe")) ? Path.Combine(Environment.SystemDirectory, "curl.exe") : null;
+
+        static string[] CurlArgs(string url, int timeoutSec) => new[] { "--fail", "--silent", "--show-error", "--location", "--proto", "=https,http,file",
+            "--max-time", timeoutSec.ToString(), "--user-agent", "CAD-Master/" + Controller.Version,
+            "--header", "Accept: " + (url.Contains("api.github.com") ? "application/vnd.github+json" : "*/*"), url };
+
+        static string CurlError(ProcessUtil.Result r) =>
+            r.Stderr.Contains("403") ? "GitHub's hourly limit for update checks is used up on this network. Try again later."
+            : "No connection to GitHub (" + r.Stderr.Trim().Replace("curl: ", "") + ")";
+
         static Updater() { ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; }
 
         static HttpWebRequest Request(string url, int timeoutMs)
@@ -260,6 +273,12 @@ namespace CADMaster
         static string GetText(string url)
         {
             if (url.StartsWith("file:", StringComparison.OrdinalIgnoreCase)) return File.ReadAllText(new Uri(url).LocalPath);
+            if (Curl != null)
+            {
+                var r = ProcessUtil.Run(Curl, CurlArgs(url, 20), null, 30000);
+                if (!r.Ok) throw new WebException(CurlError(r));
+                return r.Stdout;
+            }
             try
             {
                 using (var resp = (HttpWebResponse)Request(url, 20000).GetResponse())
@@ -275,6 +294,21 @@ namespace CADMaster
         {
             var part = path + ".part";
             if (url.StartsWith("file:", StringComparison.OrdinalIgnoreCase)) { File.Copy(new Uri(url).LocalPath, part, true); }
+            else if (Curl != null)
+            {
+                // Progress: watch the file grow while curl writes it
+                var args = CurlArgs(url, 900).Concat(new[] { "--output", part }).ToArray();
+                var job = System.Threading.Tasks.Task.Run(() => ProcessUtil.Run(Curl, args, null, 16 * 60000));
+                int last = -1;
+                while (!job.Wait(400))
+                {
+                    long done = File.Exists(part) ? new FileInfo(part).Length : 0;
+                    var pct = expected > 0 ? (int)Math.Min(99, done * 100 / expected) : 0;
+                    if (pct / 5 != last / 5) { last = pct; progress(pct); }
+                }
+                if (!job.Result.Ok) { try { File.Delete(part); } catch { } throw new WebException(CurlError(job.Result)); }
+                progress(100);
+            }
             else
             {
                 using (var resp = Request(url, 30000).GetResponse())

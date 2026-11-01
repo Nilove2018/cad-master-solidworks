@@ -34,6 +34,10 @@ namespace CADMaster
         public string LastUpdateCheck { get; set; } = "";
         /// <summary>A version the user rolled back from: automatic checks don't offer it again.</summary>
         public string SkippedVersion { get; set; } = "";
+        /// <summary>Developer mode: CAD Master never updates the design rules (the solidworks-api skill).</summary>
+        public bool ManageSkillMyself { get; set; } = false;
+        /// <summary>When the design rules were last checked for an update (ISO 8601).</summary>
+        public string LastSkillCheck { get; set; } = "";
         /// <summary>The version that ran last time, to say "Updated to …" once after an update.</summary>
         public string LastRunVersion { get; set; } = "";
 
