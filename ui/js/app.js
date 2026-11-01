@@ -1014,7 +1014,12 @@
   // and switches to it at the next SOLIDWORKS start. The bar under the tabs shows each stage.
   const UPD_STEP = { download: 'Downloading', verify: 'Checking the download…', unpack: 'Unpacking…', switch: 'Switching over…' };
 
-  function checkForUpdates() { S.updManual = true; send('update_check'); renderAboutUpdates(); }
+  function checkForUpdates() {
+    S.updManual = true;
+    S.skill = Object.assign({}, S.skill, { checking: true });
+    send('update_check');
+    renderAboutUpdates();
+  }
 
   function onUpdate(m) {
     if (m.available) S.updInfo = m.available; // kept after installing, for What's new
@@ -1153,7 +1158,7 @@
     box.innerHTML = '';
     box.appendChild(h(`<div class="kv">
       <div>Version</div><div>${k.version ? esc(k.version) + (k.source ? ', ' + esc(k.source) : '') : k.source ? esc(k.source) : 'not found'}</div>
-      <div>Updates</div><div>${k.managed ? 'off: you manage them yourself' : 'automatic, once a day between chats'}</div>
+      <div>Updates</div><div>${k.managed ? 'off: you manage them yourself' : 'automatic, between chats'}</div>
       <div>Last checked</div><div>${k.checking ? 'checking now…' : last && !isNaN(last) ? esc(last.toLocaleString()) : 'not yet'}</div></div>`));
     const btns = h('<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>');
     const chk = h(`<button class="btn sm">${icon('refresh')}Check design rules</button>`);
@@ -1218,7 +1223,8 @@
       <div class="section">Safety</div>
       <label class="check"><input type="checkbox" id="sBypass"><span>Bypass mode is on: Claude may take the design decisions and build without asking. It never closes or overwrites your own documents.</span></label>
       <div class="section">Updates</div>
-      <label class="check"><input type="checkbox" id="sAutoUpd"><span>Look for new CAD Master versions once a day. You always decide when to install.</span></label>
+      <label class="check"><input type="checkbox" id="sAutoUpd"><span>Look for new CAD Master versions a few times a day</span></label>
+      <label class="check"><input type="checkbox" id="sAutoInst"><span>Install them automatically. The new version loads the next time SOLIDWORKS starts, and About can roll it back.</span></label>
       <label class="check"><input type="checkbox" id="sPre"><span>Also offer test versions (pre-releases)</span></label>
       <div class="section">Design rules</div>
       <label class="check"><input type="checkbox" id="sSkillMine"><span>I manage the design rules myself (developer mode): CAD Master never updates them</span></label>
@@ -1232,6 +1238,7 @@
     $('#sExtra', b).value = st.ExtraInstructions || '';
     $('#sBypass', b).checked = !!st.AllowBypass;
     $('#sAutoUpd', b).checked = st.AutoUpdateCheck !== false;
+    $('#sAutoInst', b).checked = st.AutoInstallUpdates !== false;
     $('#sPre', b).checked = !!st.IncludePrereleases;
     $('#sSkillMine', b).checked = !!st.ManageSkillMyself;
     $('#sSkillRepo', b).value = st.SkillRepoPath || '';
@@ -1244,7 +1251,7 @@
         DefaultMode: $('#sMode', b).value, PlanFirst: $('#sPlanFirst', b).checked, DefaultModel: $('#sModel', b).value,
         DefaultEffort: $('#sEffort', b).value, AutoAttachContext: $('#sCtx', b).checked, ShowThinking: $('#sThink', b).checked,
         ExtraInstructions: $('#sExtra', b).value, Theme: $('#sTheme', b).value, FontSize: Number($('#sFont', b).value), AllowBypass: $('#sBypass', b).checked,
-        AutoUpdateCheck: $('#sAutoUpd', b).checked, IncludePrereleases: $('#sPre', b).checked,
+        AutoUpdateCheck: $('#sAutoUpd', b).checked, AutoInstallUpdates: $('#sAutoInst', b).checked, IncludePrereleases: $('#sPre', b).checked,
         ManageSkillMyself: $('#sSkillMine', b).checked, SkillRepoPath: $('#sSkillRepo', b).value.trim(),
       });
       send('save_settings', { settings: next });

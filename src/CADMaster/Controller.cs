@@ -46,7 +46,7 @@ namespace CADMaster
         Dictionary<string, object> justUpdated;  // "Updated to …" notice, until the panel has shown it
         System.Threading.Timer updateTimer;
         (string source, string version)? skillInfo;   // design rules in use, from the last setup check
-        volatile bool skillChecking;
+        volatile bool skillChecking, skillAfterTurn;
         Dictionary<string, object> skillUpdate;  // the last design-rule update this session: from, version, notes
 
         /// <summary>The product version (VERSION file), not the fixed COM AssemblyVersion.</summary>
@@ -93,7 +93,7 @@ namespace CADMaster
                 settings.Save();
             }
             Task.Run(() => { try { Updater.Cleanup(); } catch (Exception ex) { Log.Error("update cleanup", ex); } });
-            // First look 45 s after start (SOLIDWORKS is busy before that), then hourly whether a day has passed
+            // First look 45 s after start (SOLIDWORKS is busy before that), then hourly whether 6 hours have passed
             updateTimer = new System.Threading.Timer(_ =>
             {
                 if (settings.AutoUpdateCheck && Due(settings.LastUpdateCheck)) CheckForUpdate(false);
@@ -103,7 +103,7 @@ namespace CADMaster
 
         static bool Due(string lastCheck) =>
             !DateTime.TryParse(lastCheck, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t)
-            || DateTime.UtcNow - t.ToUniversalTime() > TimeSpan.FromHours(20);
+            || DateTime.UtcNow - t.ToUniversalTime() > TimeSpan.FromHours(6);
 
         // ------------------------------------------------------------------ design-rule updates
         void PostSkill(string result = null) =>
@@ -117,7 +117,13 @@ namespace CADMaster
         void CheckSkill(bool manual)
         {
             if (settings.ManageSkillMyself) { if (manual) PostSkill("You manage the design rules yourself (Settings), so CAD Master leaves them alone."); return; }
-            if (session != null && session.Busy) { if (manual) PostSkill("Claude is working. Check again when it has finished."); return; }
+            if (session != null && session.Busy)
+            {
+                // Runs as soon as Claude has finished (see the "result" message)
+                skillAfterTurn = true;
+                if (manual) PostSkill("Claude is working. The design rules update when it has finished.");
+                return;
+            }
             var exe = ClaudeExe();
             if (exe == null || skillChecking) return;
             skillChecking = true;
@@ -184,6 +190,8 @@ namespace CADMaster
             }
             finally { updateChecking = false; }
             if (manual || update != null) PostUpdate(manual ? result : null);
+            // A click on Check for updates, or the automatic check with automatic installs on, installs it too
+            if (update != null && update.Blocked == null && (manual || settings.AutoInstallUpdates)) InstallUpdate();
         }
 
         void InstallUpdate()
@@ -366,7 +374,11 @@ namespace CADMaster
             s.Message += (raw, m) =>
             {
                 panel.Post("{\"type\":\"claude\",\"msg\":" + raw + "}");
-                if (m.Str("type") == "result") Post("session", "state", "idle", "sessionId", s.SessionId);
+                if (m.Str("type") == "result")
+                {
+                    Post("session", "state", "idle", "sessionId", s.SessionId);
+                    if (skillAfterTurn) { skillAfterTurn = false; Task.Run(() => CheckSkill(false)); }
+                }
             };
             s.PermissionRequest += (id, req) => Post("permission", "requestId", id, "request", req);
             s.Exited += (code, tail) =>
@@ -516,7 +528,10 @@ namespace CADMaster
                     PostUpdate();
                     break;
 
-                case "update_check": Task.Run(() => CheckForUpdate(true)); break;
+                case "update_check": // CAD Master and its design rules together
+                    Task.Run(() => CheckForUpdate(true));
+                    Task.Run(() => CheckSkill(true));
+                    break;
 
                 case "update_install": Task.Run(InstallUpdate); break;
 

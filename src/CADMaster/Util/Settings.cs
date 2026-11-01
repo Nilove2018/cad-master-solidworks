@@ -26,8 +26,10 @@ namespace CADMaster
         public string PythonPath { get; set; } = "";
         /// <summary>The user finished first-run setup; afterwards it only shows when something required is missing.</summary>
         public bool SetupDone { get; set; } = false;
-        /// <summary>Look for a new CAD Master version once a day.</summary>
+        /// <summary>Look for a new CAD Master version a few times a day.</summary>
         public bool AutoUpdateCheck { get; set; } = true;
+        /// <summary>Install a version found by the automatic check straight away (it loads at the next SOLIDWORKS start).</summary>
+        public bool AutoInstallUpdates { get; set; } = true;
         /// <summary>Also offer test versions (always on while the running version is one).</summary>
         public bool IncludePrereleases { get; set; } = false;
         /// <summary>When the last automatic check ran (ISO 8601).</summary>
