@@ -245,9 +245,10 @@ namespace CADMaster
         }
 
         // ------------------------------------------------------------------ HTTP
-        // Downloads go through Windows' own curl.exe (Windows 10 1803 and later): firewalls often block
-        // SLDWORKS.exe from the internet (licensing), and everything this add-in does in-process is
-        // SOLIDWORKS to the firewall. Without curl.exe it falls back to .NET's HttpWebRequest.
+        // Downloads go through Windows' own curl.exe (Windows 10 1803 and later): some firewalls block
+        // SLDWORKS.exe from the internet, and everything this add-in does in-process is SOLIDWORKS to the
+        // firewall. Only curl.exe connects; SOLIDWORKS stays blocked. Without curl.exe it falls back to
+        // .NET's HttpWebRequest.
         static string Curl => File.Exists(Path.Combine(Environment.SystemDirectory, "curl.exe")) ? Path.Combine(Environment.SystemDirectory, "curl.exe") : null;
 
         static string[] CurlArgs(string url, int timeoutSec) => new[] { "--fail", "--silent", "--show-error", "--location", "--proto", "=https,http,file",

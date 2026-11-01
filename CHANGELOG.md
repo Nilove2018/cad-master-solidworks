@@ -11,7 +11,7 @@ Each version lists **what improved** in plain words. CAD Master will show these 
 ### Fixed
 - Python or Git installed while SOLIDWORKS was open stayed invisible to Claude until SOLIDWORKS restarted. Claude now always gets the current PATH.
 - Claude now uses the Python that the setup check found, for example `py -3` on PCs where only the Python launcher works.
-- Update checks work on PCs whose firewall blocks SOLIDWORKS from the internet (a common licensing setup): CAD Master downloads through Windows' own `curl.exe`.
+- Update checks work on PCs whose firewall blocks SOLIDWORKS from the internet (common on locked-down networks): CAD Master downloads through Windows' own `curl.exe`. SOLIDWORKS itself stays blocked.
 
 ### Planned
 - Opt-in, anonymous sharing of lessons learned (see PRIVACY.md).
